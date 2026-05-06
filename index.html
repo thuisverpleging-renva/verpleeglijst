@@ -448,21 +448,31 @@ textarea { resize: vertical; min-height: 70px; }
   </div>
   <div class="card">
     <div class="section-title">Verzorging & planning</div>
-    <div class="form-grid">
-      <div class="field"><label>Gewenste uren — van</label><input type="time" id="f-van" value="07:00"></div>
-      <div class="field"><label>Gewenste uren — tot</label><input type="time" id="f-tot" value="09:30"></div>
-    </div>
-    <div class="form-grid" style="margin-top:10px">
+    <div class="form-grid" style="margin-bottom:10px">
       <div class="field"><label>Gem. duur zorg (min)</label><input type="number" id="f-duur" value="30" min="5" max="180"></div>
       <div class="field"><label>Ronde</label>
-        <select id="f-ronde">
+        <select id="f-ronde" onchange="toggleRondeUren()">
           <option value="ochtend">Ochtend</option>
           <option value="avond">Avond</option>
           <option value="beide">Beide (ochtend + avond)</option>
         </select>
       </div>
     </div>
-    <div class="field" style="margin-top:10px">
+    <div id="uren-ochtend" style="background:var(--cream);border-radius:var(--radius-sm);padding:10px;margin-bottom:8px">
+      <div style="font-size:11px;font-weight:500;color:var(--text-muted);margin-bottom:6px">☀️ Ochtend — gewenste uren</div>
+      <div class="form-grid">
+        <div class="field"><label>Van</label><input type="time" id="f-van" value="07:00"></div>
+        <div class="field"><label>Tot</label><input type="time" id="f-tot" value="09:30"></div>
+      </div>
+    </div>
+    <div id="uren-avond" style="background:var(--cream);border-radius:var(--radius-sm);padding:10px;margin-bottom:8px;display:none">
+      <div style="font-size:11px;font-weight:500;color:var(--text-muted);margin-bottom:6px">🌙 Avond — gewenste uren</div>
+      <div class="form-grid">
+        <div class="field"><label>Van</label><input type="time" id="f-van-avond" value="17:00"></div>
+        <div class="field"><label>Tot</label><input type="time" id="f-tot-avond" value="20:00"></div>
+      </div>
+    </div>
+    <div class="field" style="margin-top:4px">
       <label>Standaard verpleegkundige zorgen</label>
       <textarea id="f-zorgen" placeholder="bv. wondverzorging, bloeddruk meten, injectie insuline, stoma…"></textarea>
     </div>
@@ -737,6 +747,13 @@ async function zoekCoordinaten() {
     status.style.color = 'var(--red)';
     status.textContent = '✗ Verbindingsfout. Controleer je internetverbinding.';
   }
+}
+
+// ── RONDE UREN TOGGLE ─────────────────────────────────────────────
+function toggleRondeUren() {
+  const ronde = document.getElementById('f-ronde').value;
+  document.getElementById('uren-ochtend').style.display = (ronde === 'ochtend' || ronde === 'beide') ? 'block' : 'none';
+  document.getElementById('uren-avond').style.display = (ronde === 'avond' || ronde === 'beide') ? 'block' : 'none';
 }
 
 function geslachtLabel(g) {
@@ -1026,7 +1043,7 @@ function renderLijst() {
       <div class="detail-body" id="det-${p.id}">
         <div class="detail-grid">
           <div class="detail-field"><label>Telefoon</label><div class="val">${p.tel || '—'}</div></div>
-          <div class="detail-field"><label>Verzorging</label><div class="val">${p.van} – ${p.tot} · ${p.duur} min</div></div>
+          <div class="detail-field"><label>Verzorging</label><div class="val">${p.ronde === 'beide' ? '☀️ ' + p.van + '–' + p.tot + ' · 🌙 ' + (p.vanAvond||'17:00') + '–' + (p.totAvond||'20:00') : p.van + '–' + p.tot} · ${p.duur} min</div></div>
         </div>
         <div class="detail-grid">
           <div class="detail-field"><label>Geslacht</label><div class="val">${gsl || '—'}</div></div>
@@ -1066,6 +1083,9 @@ function bewerkPatient(id) {
   F('status').value = p.status || 'actief';
   F('van').value = p.van || '07:00';
   F('tot').value = p.tot || '09:30';
+  document.getElementById('f-van-avond').value = p.vanAvond || '17:00';
+  document.getElementById('f-tot-avond').value = p.totAvond || '20:00';
+  toggleRondeUren();
   F('duur').value = p.duur || 30;
   F('ronde').value = p.ronde || 'ochtend';
   F('zorgen').value = p.zorgen || '';
@@ -1103,6 +1123,8 @@ function slaPatientOp() {
     status: document.getElementById('f-status').value,
     van: document.getElementById('f-van').value,
     tot: document.getElementById('f-tot').value,
+    vanAvond: document.getElementById('f-van-avond').value,
+    totAvond: document.getElementById('f-tot-avond').value,
     duur: parseInt(document.getElementById('f-duur').value) || 30,
     ronde: document.getElementById('f-ronde').value,
     zorgen: F('zorgen'),
@@ -1130,8 +1152,11 @@ function slaPatientOp() {
   document.getElementById('f-duur').value = '30';
   document.getElementById('f-van').value = '07:00';
   document.getElementById('f-tot').value = '09:30';
+  document.getElementById('f-van-avond').value = '17:00';
+  document.getElementById('f-tot-avond').value = '20:00';
   document.getElementById('f-status').value = 'actief';
   document.getElementById('f-ronde').value = 'ochtend';
+  toggleRondeUren();
   initDagSchemaForm({});
   initTijdsSchemaForm({});
   laadFrequentie(null);
@@ -1208,7 +1233,7 @@ function genereerRondes() {
           ${tbStr}
           ${medStr}
         </div>
-        <div class="stop-time">${p.van}–${p.tot}</div>
+        <div class="stop-time">${r.klasse === 'avond' ? (p.vanAvond || p.van) + '–' + (p.totAvond || p.tot) : p.van + '–' + p.tot}</div>
       </div>`;
     }).join('');
 
