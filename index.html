@@ -285,6 +285,14 @@ textarea { resize: vertical; min-height: 70px; }
   .tab-icon { font-size: 20px; }
 }
 
+/* ── DAG KNOPPEN (frequentie) ── */
+.dag-knop {
+  padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 500;
+  border: 1px solid var(--border-med); background: var(--white); color: var(--text-muted);
+  cursor: pointer; transition: all 0.15s; font-family: 'DM Sans', sans-serif;
+}
+.dag-knop.actief { background: var(--green); color: white; border-color: var(--green); }
+
 /* ── DAG SCHEMA ── */
 .dag-schema { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 .dag-rij {
@@ -417,8 +425,18 @@ textarea { resize: vertical; min-height: 70px; }
       <label>Adres (straat, gemeente)</label>
       <input type="text" id="f-adres" placeholder="Kerkstraat 12, Ichtegem">
     </div>
-    <div class="form-grid-3" style="margin-top:10px">
+    <div class="form-grid" style="margin-top:10px">
       <div class="field"><label>Geboortedatum</label><input type="date" id="f-geb"></div>
+      <div class="field"><label>Geslacht</label>
+        <select id="f-geslacht">
+          <option value="">— niet opgegeven —</option>
+          <option value="v">Vrouw</option>
+          <option value="m">Man</option>
+          <option value="x">X / niet-binair</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-grid" style="margin-top:10px">
       <div class="field"><label>Telefoon</label><input type="tel" id="f-tel" placeholder="051 58 …"></div>
       <div class="field"><label>Status</label>
         <select id="f-status">
@@ -447,6 +465,57 @@ textarea { resize: vertical; min-height: 70px; }
     <div class="field" style="margin-top:10px">
       <label>Standaard verpleegkundige zorgen</label>
       <textarea id="f-zorgen" placeholder="bv. wondverzorging, bloeddruk meten, injectie insuline, stoma…"></textarea>
+    </div>
+  </div>
+  <div class="card">
+    <div class="section-title">Verzorgingsfrequentie <span style="font-weight:300;font-size:10px;color:var(--text-muted)">— op welke dagen komt de patiënt aan de beurt?</span></div>
+    <div class="field" style="margin-bottom:10px">
+      <label>Type frequentie</label>
+      <select id="f-freq-type" onchange="toggleFreqType()">
+        <option value="dagelijks">Dagelijks</option>
+        <option value="vaste-dagen">Vaste dagen (bv. ma/wo/vr)</option>
+        <option value="interval-dag">Interval in dagen (bv. om de 2 dagen)</option>
+        <option value="interval-week">Interval in weken (bv. om de 2 weken)</option>
+      </select>
+    </div>
+
+    <div id="freq-vaste-dagen" style="display:none">
+      <label style="font-size:11px;color:var(--text-muted);font-weight:500;display:block;margin-bottom:6px">Selecteer de vaste dagen</label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px" id="freq-dagen-knoppen">
+        <button type="button" class="dag-knop" data-dag="ma" onclick="toggleDagKnop(this)">Ma</button>
+        <button type="button" class="dag-knop" data-dag="di" onclick="toggleDagKnop(this)">Di</button>
+        <button type="button" class="dag-knop" data-dag="wo" onclick="toggleDagKnop(this)">Wo</button>
+        <button type="button" class="dag-knop" data-dag="do" onclick="toggleDagKnop(this)">Do</button>
+        <button type="button" class="dag-knop" data-dag="vr" onclick="toggleDagKnop(this)">Vr</button>
+        <button type="button" class="dag-knop" data-dag="za" onclick="toggleDagKnop(this)">Za</button>
+        <button type="button" class="dag-knop" data-dag="zo" onclick="toggleDagKnop(this)">Zo</button>
+      </div>
+    </div>
+
+    <div id="freq-interval-dag" style="display:none">
+      <div class="form-grid">
+        <div class="field"><label>Om de … dagen</label><input type="number" id="f-interval-dag" value="2" min="2" max="30"></div>
+        <div class="field"><label>Startdatum (eerste bezoek)</label><input type="date" id="f-interval-dag-start"></div>
+      </div>
+    </div>
+
+    <div id="freq-interval-week" style="display:none">
+      <div class="form-grid">
+        <div class="field"><label>Om de … weken</label><input type="number" id="f-interval-week" value="2" min="2" max="52"></div>
+        <div class="field"><label>Startdatum (eerste bezoek)</label><input type="date" id="f-interval-week-start"></div>
+      </div>
+      <div style="margin-top:8px">
+        <label style="font-size:11px;color:var(--text-muted);font-weight:500;display:block;margin-bottom:6px">Op welke dag van de week?</label>
+        <div style="display:flex;flex-wrap:wrap;gap:6px" id="freq-week-dagknoppen">
+          <button type="button" class="dag-knop" data-dag="ma" onclick="toggleWeekDagKnop(this)">Ma</button>
+          <button type="button" class="dag-knop" data-dag="di" onclick="toggleWeekDagKnop(this)">Di</button>
+          <button type="button" class="dag-knop" data-dag="wo" onclick="toggleWeekDagKnop(this)">Wo</button>
+          <button type="button" class="dag-knop" data-dag="do" onclick="toggleWeekDagKnop(this)">Do</button>
+          <button type="button" class="dag-knop" data-dag="vr" onclick="toggleWeekDagKnop(this)">Vr</button>
+          <button type="button" class="dag-knop" data-dag="za" onclick="toggleWeekDagKnop(this)">Za</button>
+          <button type="button" class="dag-knop" data-dag="zo" onclick="toggleWeekDagKnop(this)">Zo</button>
+        </div>
+      </div>
     </div>
   </div>
   <div class="card">
@@ -510,7 +579,7 @@ textarea { resize: vertical; min-height: 70px; }
   <div class="card">
     <div class="section-title">Versiebeheer</div>
     <div style="font-size:13px;color:var(--text-muted)">
-      VP Planning v1.0 · Data opgeslagen lokaal op dit apparaat
+      VP Planning v1.2 · Data opgeslagen lokaal op dit apparaat
     </div>
     <button class="btn btn-danger btn-sm" style="margin-top:10px" onclick="resetData()">🗑 Alle data wissen</button>
   </div>
@@ -574,7 +643,105 @@ function leesDagSchema() {
   return schema;
 }
 
-function duurOpDatum(p, datum) {
+function geslachtLabel(g) {
+  return g === 'v' ? '♀ Vrouw' : g === 'm' ? '♂ Man' : g === 'x' ? '⚧ X' : '';
+}
+
+// ── FREQUENTIE FORMULIER ──────────────────────────────────────────
+function toggleFreqType() {
+  const t = document.getElementById('f-freq-type').value;
+  document.getElementById('freq-vaste-dagen').style.display = t === 'vaste-dagen' ? 'block' : 'none';
+  document.getElementById('freq-interval-dag').style.display = t === 'interval-dag' ? 'block' : 'none';
+  document.getElementById('freq-interval-week').style.display = t === 'interval-week' ? 'block' : 'none';
+}
+
+function toggleDagKnop(btn) {
+  btn.classList.toggle('actief');
+}
+
+function toggleWeekDagKnop(btn) {
+  // voor interval-week: slechts 1 dag selecteerbaar
+  document.querySelectorAll('#freq-week-dagknoppen .dag-knop').forEach(b => b.classList.remove('actief'));
+  btn.classList.add('actief');
+}
+
+function leesFrequentie() {
+  const t = document.getElementById('f-freq-type').value;
+  const freq = { type: t };
+  if (t === 'vaste-dagen') {
+    freq.dagen = Array.from(document.querySelectorAll('#freq-dagen-knoppen .dag-knop.actief')).map(b => b.dataset.dag);
+  } else if (t === 'interval-dag') {
+    freq.interval = parseInt(document.getElementById('f-interval-dag').value) || 2;
+    freq.start = document.getElementById('f-interval-dag-start').value;
+  } else if (t === 'interval-week') {
+    freq.interval = parseInt(document.getElementById('f-interval-week').value) || 2;
+    freq.start = document.getElementById('f-interval-week-start').value;
+    const actDag = document.querySelector('#freq-week-dagknoppen .dag-knop.actief');
+    freq.dag = actDag ? actDag.dataset.dag : null;
+  }
+  return freq;
+}
+
+function laadFrequentie(freq) {
+  if (!freq) {
+    document.getElementById('f-freq-type').value = 'dagelijks';
+    toggleFreqType();
+    return;
+  }
+  document.getElementById('f-freq-type').value = freq.type || 'dagelijks';
+  toggleFreqType();
+  if (freq.type === 'vaste-dagen' && freq.dagen) {
+    document.querySelectorAll('#freq-dagen-knoppen .dag-knop').forEach(b => {
+      b.classList.toggle('actief', freq.dagen.includes(b.dataset.dag));
+    });
+  } else if (freq.type === 'interval-dag') {
+    document.getElementById('f-interval-dag').value = freq.interval || 2;
+    document.getElementById('f-interval-dag-start').value = freq.start || '';
+  } else if (freq.type === 'interval-week') {
+    document.getElementById('f-interval-week').value = freq.interval || 2;
+    document.getElementById('f-interval-week-start').value = freq.start || '';
+    document.querySelectorAll('#freq-week-dagknoppen .dag-knop').forEach(b => {
+      b.classList.toggle('actief', b.dataset.dag === freq.dag);
+    });
+  }
+}
+
+// Bepaal of een patiënt aan de beurt is op een gegeven datum
+function isAanDeBeurt(p, datum) {
+  const freq = p.frequentie;
+  if (!freq || freq.type === 'dagelijks') return true;
+  const dagShort = DAYS_SHORT[datum.getDay()];
+
+  if (freq.type === 'vaste-dagen') {
+    return freq.dagen && freq.dagen.includes(dagShort);
+  }
+
+  if (freq.type === 'interval-dag' || freq.type === 'interval-week') {
+    if (!freq.start) return true;
+    const start = new Date(freq.start + 'T12:00:00');
+    const interval = freq.type === 'interval-dag'
+      ? freq.interval
+      : freq.interval * 7;
+
+    if (freq.type === 'interval-week') {
+      // Moet ook op de juiste weekdag zijn
+      if (freq.dag && dagShort !== freq.dag) return false;
+    }
+
+    const diffDagen = Math.round((datum - start) / 86400000);
+    if (diffDagen < 0) return false;
+    return diffDagen % interval === 0;
+  }
+  return true;
+}
+
+function freqOmschrijving(freq) {
+  if (!freq || freq.type === 'dagelijks') return 'Dagelijks';
+  if (freq.type === 'vaste-dagen') return freq.dagen && freq.dagen.length ? freq.dagen.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(' · ') : '—';
+  if (freq.type === 'interval-dag') return `Om de ${freq.interval} dagen`;
+  if (freq.type === 'interval-week') return `Om de ${freq.interval} weken${freq.dag ? ' op ' + freq.dag : ''}`;
+  return '—';
+}
   const dag = DAYS_SHORT[datum.getDay()];
   if (p.dagSchema && p.dagSchema[dag] && p.dagSchema[dag].actief && p.dagSchema[dag].duur) {
     return p.dagSchema[dag].duur;
@@ -714,7 +881,8 @@ function renderLijst() {
   });
 
   const actief = patienten.filter(p => p.status === 'actief');
-  const vandaagActief = actief.filter(p => !afwezigOp(p, vandaag));
+  const vandaagDatum = new Date();
+  const vandaagActief = actief.filter(p => !afwezigOp(p, vandaag) && isAanDeBeurt(p, vandaagDatum));
   document.getElementById('s-totaal').textContent = patienten.length;
   document.getElementById('s-actief').textContent = actief.length;
   document.getElementById('s-vandaag').textContent = vandaagActief.length;
@@ -727,12 +895,13 @@ function renderLijst() {
 
   el.innerHTML = gefilterd.map(p => {
     const age = leeftijd(p.geb);
+    const gsl = geslachtLabel(p.geslacht);
     return `
     <div class="patient-item" style="margin-bottom:8px">
       <div class="patient-header" onclick="toggleDetail(${p.id})">
         <div class="avatar">${initials(p)}</div>
         <div style="flex:1">
-          <div class="patient-name">${p.voornaam} ${p.naam}${age ? ' <span style="font-weight:300;color:var(--text-muted);font-size:12px">· ${age} j</span>' : ''}</div>
+          <div class="patient-name">${p.voornaam} ${p.naam}${age ? ' <span style="font-weight:300;color:var(--text-muted);font-size:12px">· ${age} j</span>' : ''}${gsl ? ' <span style="font-size:11px;color:var(--text-muted)">' + gsl + '</span>' : ''}</div>
           <div class="patient-sub">📍 ${p.adres || '—'}</div>
         </div>
         <div class="badges">
@@ -744,6 +913,10 @@ function renderLijst() {
         <div class="detail-grid">
           <div class="detail-field"><label>Telefoon</label><div class="val">${p.tel || '—'}</div></div>
           <div class="detail-field"><label>Verzorging</label><div class="val">${p.van} – ${p.tot} · ${p.duur} min</div></div>
+        </div>
+        <div class="detail-grid">
+          <div class="detail-field"><label>Geslacht</label><div class="val">${gsl || '—'}</div></div>
+          <div class="detail-field"><label>Frequentie</label><div class="val">${freqOmschrijving(p.frequentie)}</div></div>
         </div>
         <div class="detail-field"><label>Verpleegkundige zorgen</label><div class="val">${p.zorgen || '—'}</div></div>
         ${p.medisch ? `<div class="detail-field"><label>Medisch profiel</label><div class="val"><span class="badge b-med">⚕ ${p.medisch}</span></div></div>` : ''}
@@ -774,6 +947,7 @@ function bewerkPatient(id) {
   F('naam').value = p.naam || '';
   F('adres').value = p.adres || '';
   F('geb').value = p.geb || '';
+  F('geslacht').value = p.geslacht || '';
   F('tel').value = p.tel || '';
   F('status').value = p.status || 'actief';
   F('van').value = p.van || '07:00';
@@ -786,6 +960,7 @@ function bewerkPatient(id) {
   F('lat').value = p.lat || '';
   F('lon').value = p.lon || '';
   initDagSchemaForm(p.dagSchema || {});
+  laadFrequentie(p.frequentie || null);
   showTab('nieuw');
   document.getElementById('pane-nieuw').scrollTo(0, 0);
   window.scrollTo(0, 0);
@@ -806,6 +981,7 @@ function slaPatientOp() {
   const p = {
     id: editId || nextId(),
     voornaam, naam,
+    geslacht: document.getElementById('f-geslacht').value,
     adres: F('adres'),
     geb: F('geb'),
     tel: F('tel'),
@@ -819,7 +995,8 @@ function slaPatientOp() {
     medisch: F('medisch'),
     lat: parseFloat(F('lat')) || null,
     lon: parseFloat(F('lon')) || null,
-    dagSchema: leesDagSchema()
+    dagSchema: leesDagSchema(),
+    frequentie: leesFrequentie()
   };
 
   if (editId) {
@@ -840,6 +1017,7 @@ function slaPatientOp() {
   document.getElementById('f-status').value = 'actief';
   document.getElementById('f-ronde').value = 'ochtend';
   initDagSchemaForm({});
+  laadFrequentie(null);
 
   const msg = document.getElementById('save-ok');
   msg.textContent = '✓ ' + p.voornaam + ' ' + p.naam + (editId ? ' bijgewerkt' : ' opgeslagen');
@@ -855,7 +1033,11 @@ function genereerRondes() {
   const dagNaam = DAYS_NL[d.getDay()];
   const nRondes = parseInt(document.getElementById('n-rondes').value) || 3;
 
-  const actief = patienten.filter(p => p.status === 'actief' && !afwezigOp(p, dagNaam));
+  const actief = patienten.filter(p =>
+    p.status === 'actief'
+    && !afwezigOp(p, dagNaam)
+    && isAanDeBeurt(p, d)
+  );
 
   // Verrijk elke patiënt met de duur/zorgen voor deze specifieke dag
   const verrijkt = actief.map(p => ({
