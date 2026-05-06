@@ -578,6 +578,33 @@ textarea { resize: vertical; min-height: 70px; }
 
 <!-- ══════════════════ BEHEER / INSTELLINGEN ══════════════════ -->
 <div class="pane" id="pane-instellingen">
+  <div class="card" id="sync-status-card">
+    <div class="section-title">☁️ Cloud synchronisatie</div>
+    <div id="sync-indicator" style="display:flex;align-items:center;gap:8px;font-size:13px;padding:8px 10px;border-radius:var(--radius-sm);background:var(--cream)">
+      <span id="sync-dot" style="width:10px;height:10px;border-radius:50%;background:var(--text-light);flex-shrink:0"></span>
+      <span id="sync-tekst">Niet geconfigureerd</span>
+    </div>
+    <button class="btn btn-primary btn-full" style="margin-top:10px" onclick="syncNu()">🔄 Nu synchroniseren</button>
+  </div>
+  <div class="card">
+    <div class="section-title">Supabase instellen <span style="font-weight:300;font-size:10px;color:var(--text-muted)">— voor automatische sync</span></div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:10px">
+      Voer je Supabase Project URL en Publishable key in. Je vindt deze op <a href="https://supabase.com/dashboard" target="_blank" style="color:var(--green)">supabase.com</a> → Settings → API Keys.
+    </p>
+    <div class="field" style="margin-bottom:8px">
+      <label>Project URL</label>
+      <input type="text" id="sb-url-input" placeholder="https://xxxxxxxxxxxx.supabase.co" style="font-size:13px">
+    </div>
+    <div class="field" style="margin-bottom:10px">
+      <label>Publishable key</label>
+      <input type="password" id="sb-key-input" placeholder="sb_publishable_..." style="font-size:13px">
+    </div>
+    <button class="btn btn-primary btn-full" onclick="slaSupabaseOp()">Opslaan & verbinden</button>
+    <div id="sb-status" style="font-size:12px;margin-top:6px;display:none"></div>
+    <div style="margin-top:8px;font-size:11px;color:var(--text-muted)">
+      🔒 Sleutels worden alleen lokaal bewaard op dit toestel.
+    </div>
+  </div>
   <div class="card">
     <div class="section-title">Anthropic API-sleutel <span style="font-weight:300;font-size:10px;color:var(--text-muted)">— nodig voor foto-import</span></div>
     <p style="font-size:13px;color:var(--text-muted);margin-bottom:10px">
@@ -1031,6 +1058,126 @@ function zorgenOpDatum(p, datum) {
   return p.zorgen;
 }
 
+// ── SUPABASE SYNC ─────────────────────────────────────────────────
+const SB_URL_KEY = 'vp_sb_url';
+const SB_KEY_KEY = 'vp_sb_key';
+const SB_ROW_KEY = 'vp_sb_row_id';
+
+function getSupabase() {
+  return {
+    url: localStorage.getItem(SB_URL_KEY) || '',
+    key: localStorage.getItem(SB_KEY_KEY) || ''
+  };
+}
+
+function setSyncStatus(status, tekst) {
+  const dot = document.getElementById('sync-dot');
+  const txt = document.getElementById('sync-tekst');
+  if (!dot || !txt) return;
+  const kleuren = { ok: '#1a5c4a', bezig: '#c47d1a', fout: '#a33030', uit: '#9b9890' };
+  dot.style.background = kleuren[status] || kleuren.uit;
+  txt.textContent = tekst;
+}
+
+async function sbFetch(path, options) {
+  const sb = getSupabase();
+  if (!sb.url || !sb.key) throw new Error('Supabase niet geconfigureerd');
+  const res = await fetch(sb.url + '/rest/v1/' + path, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': sb.key,
+      'Authorization': 'Bearer ' + sb.key,
+      'Prefer': 'return=representation',
+      ...(options && options.headers)
+    }
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Supabase fout ' + res.status);
+  }
+  return res.json();
+}
+
+async function laadVanCloud() {
+  setSyncStatus('bezig', 'Laden uit cloud…');
+  const rows = await sbFetch('patienten?select=id,data&order=updated_at.desc&limit=1');
+  if (!rows || !rows.length) {
+    // Geen data in cloud — upload lokale data
+    await slaOpInCloud(patienten);
+    setSyncStatus('ok', 'Gesynchroniseerd — ' + new Date().toLocaleTimeString('nl-BE'));
+    return;
+  }
+  const row = rows[0];
+  localStorage.setItem(SB_ROW_KEY, row.id);
+  const cloudData = Array.isArray(row.data) ? row.data : [];
+  patienten = cloudData.map(p => ({
+    geslacht: '', frequentie: { type: 'dagelijks' }, dagSchema: {}, tijdsSchema: {}, ...p
+  }));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(patienten));
+  setSyncStatus('ok', 'Gesynchroniseerd — ' + new Date().toLocaleTimeString('nl-BE'));
+  renderLijst();
+  checkBirthdays();
+}
+
+async function slaOpInCloud(data) {
+  const rowId = localStorage.getItem(SB_ROW_KEY);
+  if (rowId) {
+    await sbFetch('patienten?id=eq.' + rowId, {
+      method: 'PATCH',
+      body: JSON.stringify({ data: data, updated_at: new Date().toISOString() })
+    });
+  } else {
+    const rows = await sbFetch('patienten', {
+      method: 'POST',
+      body: JSON.stringify({ data: data })
+    });
+    if (rows && rows[0]) localStorage.setItem(SB_ROW_KEY, rows[0].id);
+  }
+}
+
+async function syncNu() {
+  const sb = getSupabase();
+  if (!sb.url || !sb.key) {
+    setSyncStatus('fout', 'Vul eerst je Supabase sleutels in');
+    return;
+  }
+  setSyncStatus('bezig', 'Synchroniseren…');
+  try {
+    await laadVanCloud();
+    setSyncStatus('ok', 'Gesynchroniseerd — ' + new Date().toLocaleTimeString('nl-BE'));
+  } catch(e) {
+    setSyncStatus('fout', 'Fout: ' + e.message);
+  }
+}
+
+async function slaSupabaseOp() {
+  const url = document.getElementById('sb-url-input').value.trim().replace(/\/$/, '');
+  const key = document.getElementById('sb-key-input').value.trim();
+  const status = document.getElementById('sb-status');
+  function st(msg, kleur) {
+    status.style.display = 'block';
+    status.style.color = kleur === 'groen' ? 'var(--green)' : kleur === 'rood' ? 'var(--red)' : 'var(--amber)';
+    status.textContent = msg;
+  }
+  if (!url.includes('supabase.co')) { st('✗ Ongeldige URL. Moet eindigen op .supabase.co', 'rood'); return; }
+  if (!key.startsWith('sb_')) { st('✗ Ongeldige key. Moet beginnen met sb_publishable_', 'rood'); return; }
+  st('⏳ Verbinding testen…', 'oranje');
+  localStorage.setItem(SB_URL_KEY, url);
+  localStorage.setItem(SB_KEY_KEY, key);
+  localStorage.removeItem(SB_ROW_KEY);
+  try {
+    await laadVanCloud();
+    st('✓ Verbonden en gesynchroniseerd!', 'groen');
+    document.getElementById('sb-url-input').value = '';
+    document.getElementById('sb-key-input').value = '';
+  } catch(e) {
+    st('✗ ' + e.message, 'rood');
+    localStorage.removeItem(SB_URL_KEY);
+    localStorage.removeItem(SB_KEY_KEY);
+  }
+}
+
 let patienten = loadData();
 let editId = null;
 
@@ -1038,20 +1185,25 @@ function loadData() {
   try {
     const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
     if (data && Array.isArray(data)) {
-      // Migratie: voeg ontbrekende velden toe aan bestaande patiënten
       return data.map(p => ({
-        geslacht: '',
-        frequentie: { type: 'dagelijks' },
-        dagSchema: {},
-        tijdsSchema: {},
-        ...p
+        geslacht: '', frequentie: { type: 'dagelijks' }, dagSchema: {}, tijdsSchema: {}, ...p
       }));
     }
     return defaultPatients();
   } catch(e) { return defaultPatients(); }
 }
 
-function saveData() { localStorage.setItem(STORAGE_KEY, JSON.stringify(patienten)); }
+function saveData() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(patienten));
+  // Sync naar cloud op achtergrond als Supabase geconfigureerd
+  const sb = getSupabase();
+  if (sb.url && sb.key) {
+    setSyncStatus('bezig', 'Opslaan in cloud…');
+    slaOpInCloud(patienten)
+      .then(() => setSyncStatus('ok', 'Gesynchroniseerd — ' + new Date().toLocaleTimeString('nl-BE')))
+      .catch(e => setSyncStatus('fout', 'Sync mislukt: ' + e.message));
+  }
+}
 
 function defaultPatients() {
   return [
@@ -1075,6 +1227,13 @@ window.addEventListener('load', () => {
   checkInstallPrompt();
   initDagSchemaForm({});
   initTijdsSchemaForm({});
+  // Auto-sync bij opstarten als Supabase geconfigureerd
+  const sb = getSupabase();
+  if (sb.url && sb.key) {
+    laadVanCloud().catch(e => setSyncStatus('fout', 'Sync mislukt: ' + e.message));
+  } else {
+    setSyncStatus('uit', 'Niet geconfigureerd');
+  }
 });
 
 function initHeader() {
@@ -1125,6 +1284,9 @@ function showTab(t) {
     s.style.display = 'block';
     s.style.color = hasKey ? 'var(--green)' : 'var(--text-muted)';
     s.textContent = hasKey ? '✓ API-sleutel is ingesteld' : 'Nog geen sleutel ingesteld';
+    const sb = getSupabase();
+    if (sb.url && sb.key) setSyncStatus('ok', 'Supabase verbonden');
+    else setSyncStatus('uit', 'Niet geconfigureerd — vul sleutels in');
   }
 }
 
