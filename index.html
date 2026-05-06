@@ -285,6 +285,21 @@ textarea { resize: vertical; min-height: 70px; }
   .tab-icon { font-size: 20px; }
 }
 
+/* ── DAG SCHEMA ── */
+.dag-schema { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.dag-rij {
+  display: grid; grid-template-columns: 72px 1fr 64px; gap: 8px; align-items: center;
+  padding: 6px 8px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--cream);
+}
+.dag-rij.actief { background: var(--green-pale); border-color: var(--green-mid); }
+.dag-label { font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+.dag-toggle { width: 16px; height: 16px; accent-color: var(--green); cursor: pointer; }
+.dag-zorgen { font-size: 12px; border: none; background: transparent; padding: 0; color: var(--text); }
+.dag-zorgen:focus { outline: none; border-bottom: 1px solid var(--green); }
+.dag-duur { font-size: 12px; width: 56px; text-align: center; padding: 4px 6px; }
+.schema-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
 /* ── INSTALL PROMPT ── */
 .install-banner {
   background: var(--green-pale);
@@ -430,9 +445,14 @@ textarea { resize: vertical; min-height: 70px; }
       </div>
     </div>
     <div class="field" style="margin-top:10px">
-      <label>Verpleegkundige zorgen</label>
+      <label>Standaard verpleegkundige zorgen</label>
       <textarea id="f-zorgen" placeholder="bv. wondverzorging, bloeddruk meten, injectie insuline, stoma…"></textarea>
     </div>
+  </div>
+  <div class="card">
+    <div class="section-title">Zorgschema per dag <span style="font-weight:300;font-size:10px;color:var(--text-muted)">(optioneel — voor afwijkende duur of zorgen per dag)</span></div>
+    <p class="schema-hint" style="margin-bottom:10px">Vink een dag aan om een afwijkende duur of zorgen in te stellen. Niet aangevinkte dagen gebruiken de standaard duur.</p>
+    <div class="dag-schema" id="dag-schema-form"></div>
   </div>
   <div class="card">
     <div class="section-title">Afwezigheden & medisch profiel</div>
@@ -500,7 +520,75 @@ textarea { resize: vertical; min-height: 70px; }
 // ── DATA ─────────────────────────────────────────────────────────
 const STORAGE_KEY = 'vp_patients_v1';
 const DAYS_NL = ['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];
+const DAYS_SHORT = ['zo','ma','di','wo','do','vr','za'];
 const MONTHS_NL = ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
+
+// dagSchema = { ma: {actief:true, duur:30, zorgen:'...'}, ... }
+// sleutel = DAYS_SHORT[1..6] (ma..za) + 'zo'
+
+function initDagSchemaForm(bestaand) {
+  const el = document.getElementById('dag-schema-form');
+  el.innerHTML = DAYS_SHORT.map((d, i) => {
+    const dag = bestaand && bestaand[d];
+    const aan = dag && dag.actief;
+    return `
+    <div class="dag-rij${aan ? ' actief' : ''}" id="dagr-${d}">
+      <label class="dag-label">
+        <input type="checkbox" class="dag-toggle" id="dag-cb-${d}" ${aan ? 'checked' : ''} onchange="toggleDagRij('${d}')">
+        ${DAYS_NL[i]}
+      </label>
+      <input class="dag-zorgen" id="dag-zorgen-${d}" type="text" placeholder="zorgen deze dag…" value="${dag && dag.zorgen ? dag.zorgen : ''}" ${aan ? '' : 'disabled'} style="width:100%">
+      <input class="dag-duur" id="dag-duur-${d}" type="number" min="5" max="180" placeholder="min" value="${dag && dag.duur ? dag.duur : ''}" ${aan ? '' : 'disabled'}>
+    </div>`;
+  }).join('');
+}
+
+function toggleDagRij(d) {
+  const cb = document.getElementById('dag-cb-' + d);
+  const rij = document.getElementById('dagr-' + d);
+  const zorgenEl = document.getElementById('dag-zorgen-' + d);
+  const duurEl = document.getElementById('dag-duur-' + d);
+  if (cb.checked) {
+    rij.classList.add('actief');
+    zorgenEl.disabled = false;
+    duurEl.disabled = false;
+  } else {
+    rij.classList.remove('actief');
+    zorgenEl.disabled = true;
+    duurEl.disabled = true;
+  }
+}
+
+function leesDagSchema() {
+  const schema = {};
+  DAYS_SHORT.forEach(d => {
+    const cb = document.getElementById('dag-cb-' + d);
+    if (cb && cb.checked) {
+      schema[d] = {
+        actief: true,
+        zorgen: document.getElementById('dag-zorgen-' + d).value.trim(),
+        duur: parseInt(document.getElementById('dag-duur-' + d).value) || null
+      };
+    }
+  });
+  return schema;
+}
+
+function duurOpDatum(p, datum) {
+  const dag = DAYS_SHORT[datum.getDay()];
+  if (p.dagSchema && p.dagSchema[dag] && p.dagSchema[dag].actief && p.dagSchema[dag].duur) {
+    return p.dagSchema[dag].duur;
+  }
+  return p.duur;
+}
+
+function zorgenOpDatum(p, datum) {
+  const dag = DAYS_SHORT[datum.getDay()];
+  if (p.dagSchema && p.dagSchema[dag] && p.dagSchema[dag].actief && p.dagSchema[dag].zorgen) {
+    return p.dagSchema[dag].zorgen;
+  }
+  return p.zorgen;
+}
 
 let patienten = loadData();
 let editId = null;
@@ -533,6 +621,7 @@ window.addEventListener('load', () => {
   checkBirthdays();
   registerSW();
   checkInstallPrompt();
+  initDagSchemaForm({});
 });
 
 function initHeader() {
@@ -696,6 +785,7 @@ function bewerkPatient(id) {
   F('medisch').value = p.medisch || '';
   F('lat').value = p.lat || '';
   F('lon').value = p.lon || '';
+  initDagSchemaForm(p.dagSchema || {});
   showTab('nieuw');
   document.getElementById('pane-nieuw').scrollTo(0, 0);
   window.scrollTo(0, 0);
@@ -728,7 +818,8 @@ function slaPatientOp() {
     afwezig: F('afwezig'),
     medisch: F('medisch'),
     lat: parseFloat(F('lat')) || null,
-    lon: parseFloat(F('lon')) || null
+    lon: parseFloat(F('lon')) || null,
+    dagSchema: leesDagSchema()
   };
 
   if (editId) {
@@ -748,6 +839,7 @@ function slaPatientOp() {
   document.getElementById('f-tot').value = '09:30';
   document.getElementById('f-status').value = 'actief';
   document.getElementById('f-ronde').value = 'ochtend';
+  initDagSchemaForm({});
 
   const msg = document.getElementById('save-ok');
   msg.textContent = '✓ ' + p.voornaam + ' ' + p.naam + (editId ? ' bijgewerkt' : ' opgeslagen');
@@ -764,10 +856,18 @@ function genereerRondes() {
   const nRondes = parseInt(document.getElementById('n-rondes').value) || 3;
 
   const actief = patienten.filter(p => p.status === 'actief' && !afwezigOp(p, dagNaam));
-  const ochtend = optimaliseerRoute(actief.filter(p => p.ronde === 'ochtend' || p.ronde === 'beide'));
-  const avond = optimaliseerRoute(actief.filter(p => p.ronde === 'avond' || p.ronde === 'beide'));
 
-  // Verdeel ochtendpatiënten over rondes
+  // Verrijk elke patiënt met de duur/zorgen voor deze specifieke dag
+  const verrijkt = actief.map(p => ({
+    ...p,
+    duurVandaag: duurOpDatum(p, d),
+    zorgenVandaag: zorgenOpDatum(p, d),
+    heeftDagAfwijking: !!(p.dagSchema && p.dagSchema[DAYS_SHORT[d.getDay()]] && p.dagSchema[DAYS_SHORT[d.getDay()]].actief)
+  }));
+
+  const ochtend = optimaliseerRoute(verrijkt.filter(p => p.ronde === 'ochtend' || p.ronde === 'beide'));
+  const avond = optimaliseerRoute(verrijkt.filter(p => p.ronde === 'avond' || p.ronde === 'beide'));
+
   const rondeGroepen = Array.from({length: nRondes}, () => []);
   ochtend.forEach((p, i) => rondeGroepen[i % nRondes].push(p));
 
@@ -787,7 +887,7 @@ function genereerRondes() {
   }
 
   el.innerHTML = rondes.map(r => {
-    const totMin = r.patienten.reduce((s, p) => s + p.duur, 0);
+    const totMin = r.patienten.reduce((s, p) => s + p.duurVandaag, 0);
     const uur = Math.floor(totMin/60), min = totMin%60;
     const duurStr = uur > 0 ? `${uur}u${min > 0 ? min+'m' : ''}` : `${min} min`;
     const stops = r.patienten.map((p, i) => `
@@ -795,8 +895,8 @@ function genereerRondes() {
         <div class="stop-num">${i+1}</div>
         <div style="flex:1">
           <div class="stop-name">${p.voornaam} ${p.naam}</div>
-          <div class="stop-detail">📍 ${p.adres || '—'} · ${p.duur} min</div>
-          <div class="stop-detail">${p.zorgen || '—'}</div>
+          <div class="stop-detail">📍 ${p.adres || '—'} · <strong>${p.duurVandaag} min</strong>${p.heeftDagAfwijking ? ' <span style="font-size:10px;color:var(--amber);background:var(--amber-pale);padding:1px 6px;border-radius:10px">dag-schema</span>' : ''}</div>
+          <div class="stop-detail">${p.zorgenVandaag || '—'}</div>
           ${p.medisch ? `<span class="badge b-med" style="margin-top:3px;display:inline-block">⚕ ${p.medisch}</span>` : ''}
         </div>
         <div class="stop-time">${p.van}–${p.tot}</div>
