@@ -320,9 +320,74 @@ textarea { resize: vertical; min-height: 70px; }
   font-size: 13px;
 }
 .install-banner .ib-text { flex: 1; color: var(--green); }
+
+/* ── PIN SCHERM ── */
+#pin-scherm {
+  position: fixed; inset: 0; z-index: 9999;
+  background: var(--green);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 24px; padding: 40px 20px;
+}
+.pin-logo { font-family: 'Instrument Serif', serif; font-size: 28px; color: white; opacity: 0.9; }
+.pin-logo span { opacity: 0.6; font-style: italic; }
+.pin-subtitle { font-size: 13px; color: rgba(255,255,255,0.6); margin-top: -16px; }
+.pin-dots { display: flex; gap: 14px; }
+.pin-dot {
+  width: 16px; height: 16px; border-radius: 50%;
+  background: rgba(255,255,255,0.25); border: 2px solid rgba(255,255,255,0.5);
+  transition: background 0.15s;
+}
+.pin-dot.gevuld { background: white; border-color: white; }
+.pin-toetsenbord {
+  display: grid; grid-template-columns: repeat(3, 72px);
+  gap: 12px;
+}
+.pin-knop {
+  width: 72px; height: 72px; border-radius: 50%;
+  background: rgba(255,255,255,0.12); border: none;
+  color: white; font-size: 22px; font-family: 'DM Sans', sans-serif;
+  cursor: pointer; transition: background 0.1s; display: flex;
+  align-items: center; justify-content: center;
+}
+.pin-knop:active { background: rgba(255,255,255,0.28); transform: scale(0.95); }
+.pin-knop.leeg { background: transparent; pointer-events: none; }
+.pin-knop.wis { font-size: 16px; }
+.pin-fout { color: #ffcccc; font-size: 13px; min-height: 18px; }
+.pin-instellen-link { color: rgba(255,255,255,0.5); font-size: 12px; cursor: pointer; text-decoration: underline; margin-top: -8px; }
 </style>
 </head>
 <body>
+
+<!-- PIN SCHERM -->
+<div id="pin-scherm">
+  <div class="pin-logo">VP <span>planning</span></div>
+  <div class="pin-subtitle">Voer je pincode in</div>
+  <div class="pin-dots">
+    <div class="pin-dot" id="pd0"></div>
+    <div class="pin-dot" id="pd1"></div>
+    <div class="pin-dot" id="pd2"></div>
+    <div class="pin-dot" id="pd3"></div>
+  </div>
+  <div class="pin-fout" id="pin-fout"></div>
+  <div class="pin-toetsenbord">
+    <button class="pin-knop" onclick="pinInvoer('1')">1</button>
+    <button class="pin-knop" onclick="pinInvoer('2')">2</button>
+    <button class="pin-knop" onclick="pinInvoer('3')">3</button>
+    <button class="pin-knop" onclick="pinInvoer('4')">4</button>
+    <button class="pin-knop" onclick="pinInvoer('5')">5</button>
+    <button class="pin-knop" onclick="pinInvoer('6')">6</button>
+    <button class="pin-knop" onclick="pinInvoer('7')">7</button>
+    <button class="pin-knop" onclick="pinInvoer('8')">8</button>
+    <button class="pin-knop" onclick="pinInvoer('9')">9</button>
+    <button class="pin-knop leeg"></button>
+    <button class="pin-knop" onclick="pinInvoer('0')">0</button>
+    <button class="pin-knop wis" onclick="pinWis()">⌫</button>
+  </div>
+  <div id="pin-instellen-wrap" style="display:none">
+    <span class="pin-instellen-link" onclick="pinSlaOver()">Nog geen pincode — sla over en stel in via Beheer</span>
+  </div>
+</div>
 
 <!-- HEADER -->
 <div class="header">
@@ -578,6 +643,18 @@ textarea { resize: vertical; min-height: 70px; }
 
 <!-- ══════════════════ BEHEER / INSTELLINGEN ══════════════════ -->
 <div class="pane" id="pane-instellingen">
+  <div class="card">
+    <div class="section-title">🔐 Pincode</div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:10px">
+      Stel een 4-cijferige pincode in om de app te beveiligen. Zonder pincode zijn patiëntgegevens zichtbaar voor iedereen die de app opent.
+    </p>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input type="password" id="pin-nieuw" placeholder="Nieuwe pincode (4 cijfers)" maxlength="4" inputmode="numeric" style="flex:1;font-size:13px;letter-spacing:4px">
+      <button class="btn btn-primary" onclick="slaPin()">Opslaan</button>
+    </div>
+    <div id="pin-status" style="font-size:12px;margin-top:6px;display:none"></div>
+    <button class="btn btn-danger btn-sm" style="margin-top:8px" onclick="verwijderPin()">Pincode verwijderen</button>
+  </div>
   <div class="card" id="sync-status-card">
     <div class="section-title">☁️ Cloud synchronisatie</div>
     <div id="sync-indicator" style="display:flex;align-items:center;gap:8px;font-size:13px;padding:8px 10px;border-radius:var(--radius-sm);background:var(--cream)">
@@ -655,7 +732,97 @@ textarea { resize: vertical; min-height: 70px; }
 </div>
 
 <script>
-// ── DATA ─────────────────────────────────────────────────────────
+// ── PINCODE ───────────────────────────────────────────────────────
+const PIN_KEY = 'vp_pin_hash';
+let pinBuffer = '';
+let pinSessieOk = false;
+
+function pinHash(pin) {
+  // Eenvoudige hash — geen server nodig
+  let h = 0;
+  for (let i = 0; i < pin.length; i++) {
+    h = Math.imul(31, h) + pin.charCodeAt(i) | 0;
+  }
+  return 'ph_' + Math.abs(h).toString(36);
+}
+
+function pinInvoer(cijfer) {
+  if (pinBuffer.length >= 4) return;
+  pinBuffer += cijfer;
+  updatePinDots();
+  if (pinBuffer.length === 4) {
+    setTimeout(controleerPin, 150);
+  }
+}
+
+function pinWis() {
+  pinBuffer = pinBuffer.slice(0, -1);
+  updatePinDots();
+  document.getElementById('pin-fout').textContent = '';
+}
+
+function updatePinDots() {
+  for (let i = 0; i < 4; i++) {
+    document.getElementById('pd' + i).classList.toggle('gevuld', i < pinBuffer.length);
+  }
+}
+
+function controleerPin() {
+  const opgeslagen = localStorage.getItem(PIN_KEY);
+  if (pinHash(pinBuffer) === opgeslagen) {
+    pinSessieOk = true;
+    document.getElementById('pin-scherm').style.display = 'none';
+  } else {
+    document.getElementById('pin-fout').textContent = 'Verkeerde pincode, probeer opnieuw';
+    pinBuffer = '';
+    updatePinDots();
+    // Korte trilling via visuele feedback
+    const dots = document.querySelector('.pin-dots');
+    dots.style.transform = 'translateX(8px)';
+    setTimeout(() => { dots.style.transform = 'translateX(-8px)'; }, 80);
+    setTimeout(() => { dots.style.transform = 'translateX(0)'; }, 160);
+  }
+}
+
+function pinSlaOver() {
+  pinSessieOk = true;
+  document.getElementById('pin-scherm').style.display = 'none';
+}
+
+function checkPinBijStart() {
+  const opgeslagen = localStorage.getItem(PIN_KEY);
+  if (!opgeslagen) {
+    // Geen pincode ingesteld — toon link om over te slaan
+    document.getElementById('pin-instellen-wrap').style.display = 'block';
+    document.querySelector('.pin-subtitle').textContent = 'Geen pincode ingesteld';
+  }
+  document.getElementById('pin-scherm').style.display = 'flex';
+}
+
+function slaPin() {
+  const pin = document.getElementById('pin-nieuw').value.trim();
+  const status = document.getElementById('pin-status');
+  function st(msg, kleur) {
+    status.style.display = 'block';
+    status.style.color = kleur === 'groen' ? 'var(--green)' : 'var(--red)';
+    status.textContent = msg;
+  }
+  if (!/^\d{4}$/.test(pin)) { st('✗ Pincode moet exact 4 cijfers zijn', 'rood'); return; }
+  localStorage.setItem(PIN_KEY, pinHash(pin));
+  document.getElementById('pin-nieuw').value = '';
+  st('✓ Pincode ingesteld', 'groen');
+  setTimeout(() => status.style.display = 'none', 3000);
+}
+
+function verwijderPin() {
+  if (!confirm('Pincode verwijderen? De app is dan niet meer beveiligd.')) return;
+  localStorage.removeItem(PIN_KEY);
+  const status = document.getElementById('pin-status');
+  status.style.display = 'block';
+  status.style.color = 'var(--text-muted)';
+  status.textContent = 'Pincode verwijderd';
+  setTimeout(() => status.style.display = 'none', 3000);
+}
 const STORAGE_KEY = 'vp_patients_v1';
 const DAYS_NL = ['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];
 const DAYS_SHORT = ['zo','ma','di','wo','do','vr','za'];
@@ -1254,6 +1421,7 @@ let nextId = () => Math.max(0, ...patienten.map(p => p.id)) + 1;
 
 // ── INIT ─────────────────────────────────────────────────────────
 window.addEventListener('load', () => {
+  checkPinBijStart();
   initHeader();
   renderLijst();
   document.getElementById('ronde-datum').valueAsDate = new Date();
