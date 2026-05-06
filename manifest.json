@@ -1,0 +1,24 @@
+{
+  "name": "Verpleegkundige Planning",
+  "short_name": "VP Planning",
+  "description": "Patiëntenbeheer en rondesplanning voor zelfstandig verpleegkundigen",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8f6f1",
+  "theme_color": "#1a5c4a",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="VP Planning">
+<meta name="theme-color" content="#1a5c4a">
+<title>Verpleegkundige Planning</title>
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --green: #1a5c4a;
+  --green-light: #2a7a62;
+  --green-pale: #e8f4f0;
+  --green-mid: #c2dfd6;
+  --cream: #f8f6f1;
+  --cream-dark: #ede9e0;
+  --text: #1c1c1a;
+  --text-muted: #6b6860;
+  --text-light: #9b9890;
+  --border: rgba(28,28,26,0.12);
+  --border-med: rgba(28,28,26,0.2);
+  --white: #ffffff;
+  --amber: #c47d1a;
+  --amber-pale: #fdf3e3;
+  --red: #a33030;
+  --red-pale: #fdeaea;
+  --blue: #1a4a7a;
+  --blue-pale: #e8f0fa;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 2px 12px rgba(26,92,74,0.08);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  color: var(--text);
+  background: var(--cream);
+  min-height: 100vh;
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+/* ── HEADER ── */
+.header {
+  background: var(--green);
+  color: white;
+  padding: 16px 20px 12px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.header-top { display: flex; align-items: center; gap: 10px; }
+.header-logo { font-family: 'Instrument Serif', serif; font-size: 20px; flex: 1; }
+.header-logo span { opacity: 0.65; font-style: italic; }
+.header-date { font-size: 12px; opacity: 0.7; margin-top: 2px; }
+
+/* ── BIRTHDAY BANNER ── */
+.birthday-banner {
+  background: var(--amber-pale);
+  border-bottom: 1px solid #f0d08a;
+  padding: 10px 20px;
+  display: none;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--amber);
+  font-weight: 500;
+}
+
+/* ── TABS ── */
+.tabs {
+  display: flex;
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+  position: sticky;
+  top: 68px;
+  z-index: 99;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  padding: 12px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tab.active { color: var(--green); border-bottom-color: var(--green); }
+.tab-icon { font-size: 16px; }
+
+/* ── PANES ── */
+.pane { display: none; padding: 16px 20px 80px; flex-direction: column; gap: 12px; }
+.pane.active { display: flex; }
+
+/* ── CARDS ── */
+.card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+}
+
+/* ── STATS ROW ── */
+.stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stat-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  text-align: center;
+}
+.stat-val { font-family: 'Instrument Serif', serif; font-size: 28px; color: var(--green); }
+.stat-lbl { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+
+/* ── SEARCH BAR ── */
+.search-row { display: flex; gap: 8px; }
+.search-wrap { position: relative; flex: 1; }
+.search-wrap input { padding-left: 34px; }
+.search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-light); font-size: 15px; pointer-events: none; }
+
+/* ── PATIENT ROW ── */
+.patient-item {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.patient-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.patient-header:active { background: var(--cream); }
+.avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--green-pale);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Instrument Serif', serif;
+  font-size: 15px; color: var(--green); flex-shrink: 0;
+}
+.patient-name { font-weight: 500; font-size: 14px; }
+.patient-sub { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+.badges { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+
+/* ── BADGES ── */
+.badge {
+  display: inline-block; font-size: 10px; font-weight: 500;
+  padding: 2px 8px; border-radius: 20px;
+}
+.b-actief { background: var(--green-pale); color: var(--green); }
+.b-inactief { background: var(--cream-dark); color: var(--text-muted); }
+.b-ochtend { background: var(--blue-pale); color: var(--blue); }
+.b-avond { background: #ede8f8; color: #4a2d8a; }
+.b-beide { background: var(--amber-pale); color: var(--amber); }
+.b-med { background: var(--red-pale); color: var(--red); font-size: 10px; }
+
+/* ── DETAIL PANEL ── */
+.detail-body {
+  display: none;
+  padding: 0 14px 14px;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+}
+.detail-body.open { display: flex; }
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.detail-field label { font-size: 10px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 2px; }
+.detail-field .val { font-size: 13px; }
+.detail-actions { display: flex; gap: 8px; justify-content: flex-end; padding-top: 4px; }
+
+/* ── FORMS ── */
+.form-section { margin-bottom: 4px; }
+.section-title { font-size: 10px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+input, select, textarea {
+  width: 100%;
+  border: 1px solid var(--border-med);
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  font-size: 14px;
+  font-family: 'DM Sans', sans-serif;
+  background: var(--white);
+  color: var(--text);
+  transition: border-color 0.15s;
+}
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--green); }
+textarea { resize: vertical; min-height: 70px; }
+
+/* ── BUTTONS ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 16px; border-radius: var(--radius-sm);
+  font-size: 13px; font-family: 'DM Sans', sans-serif; font-weight: 500;
+  cursor: pointer; border: 1px solid var(--border-med);
+  background: var(--white); color: var(--text);
+  transition: all 0.15s;
+}
+.btn:active { transform: scale(0.98); }
+.btn-primary { background: var(--green); color: white; border-color: var(--green); }
+.btn-primary:hover { background: var(--green-light); }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-danger { color: var(--red); border-color: var(--border); }
+.btn-danger:hover { background: var(--red-pale); }
+.btn-full { width: 100%; justify-content: center; }
+.btn-outline { background: transparent; border-color: var(--green); color: var(--green); }
+
+/* ── RONDE CARDS ── */
+.ronde-block {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.ronde-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px;
+  background: var(--green-pale);
+  border-bottom: 1px solid var(--green-mid);
+}
+.ronde-head-title { font-weight: 500; font-size: 14px; flex: 1; }
+.ronde-meta { font-size: 11px; color: var(--text-muted); }
+.stop-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.stop-row:last-child { border-bottom: none; }
+.stop-num {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--green); color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 500; flex-shrink: 0; margin-top: 1px;
+}
+.stop-name { font-size: 13px; font-weight: 500; }
+.stop-detail { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.stop-time { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+
+/* ── EMPTY STATE ── */
+.empty { text-align: center; padding: 40px 20px; color: var(--text-muted); }
+.empty-icon { font-size: 36px; margin-bottom: 10px; }
+.empty p { font-size: 14px; }
+
+/* ── TOOLBAR ── */
+.toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.spacer { flex: 1; }
+
+/* ── DIVIDER ── */
+.divider { border-top: 1px solid var(--border); margin: 6px 0; }
+
+/* ── SUCCESS MSG ── */
+.success-msg { color: var(--green); font-size: 13px; display: none; text-align: right; }
+
+/* ── IMPORT/EXPORT ── */
+.data-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* ── MOBILE BOTTOM NAV ── */
+@media (max-width: 500px) {
+  .pane { padding-bottom: 90px; }
+  .tabs { bottom: 0; top: auto; border-top: 1px solid var(--border); border-bottom: none; position: fixed; width: 100%; max-width: 680px; }
+  .tab { flex: 1; justify-content: center; flex-direction: column; padding: 8px 4px; gap: 2px; font-size: 10px; }
+  .tab-icon { font-size: 20px; }
+}
+
+/* ── INSTALL PROMPT ── */
+.install-banner {
+  background: var(--green-pale);
+  border: 1px solid var(--green-mid);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  display: none;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.install-banner .ib-text { flex: 1; color: var(--green); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-top">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+      <rect width="28" height="28" rx="8" fill="rgba(255,255,255,0.15)"/>
+      <path d="M14 6v16M6 14h16" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="14" cy="14" r="3" fill="white" opacity="0.9"/>
+    </svg>
+    <div>
+      <div class="header-logo">VP <span>planning</span></div>
+      <div class="header-date" id="header-date"></div>
+    </div>
+  </div>
+</div>
+
+<!-- BIRTHDAY BANNER -->
+<div class="birthday-banner" id="birthday-banner">
+  <span style="font-size:20px">🎂</span>
+  <span id="birthday-text"></span>
+</div>
+
+<!-- INSTALL BANNER -->
+<div class="install-banner" id="install-banner" style="margin:10px 20px 0;display:none">
+  <span style="font-size:20px">📱</span>
+  <div class="ib-text">Installeer deze app op je iPhone: tik op <strong>Delen</strong> → <strong>Zet op beginscherm</strong></div>
+  <button class="btn btn-sm" onclick="document.getElementById('install-banner').style.display='none'">✕</button>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <div class="tab active" id="tab-lijst" onclick="showTab('lijst')">
+    <span class="tab-icon">👥</span><span>Patiënten</span>
+  </div>
+  <div class="tab" id="tab-rondes" onclick="showTab('rondes')">
+    <span class="tab-icon">🗺</span><span>Rondes</span>
+  </div>
+  <div class="tab" id="tab-nieuw" onclick="showTab('nieuw')">
+    <span class="tab-icon">➕</span><span>Nieuw</span>
+  </div>
+  <div class="tab" id="tab-instellingen" onclick="showTab('instellingen')">
+    <span class="tab-icon">⚙️</span><span>Beheer</span>
+  </div>
+</div>
+
+<!-- ══════════════════ PATIËNTEN LIJST ══════════════════ -->
+<div class="pane active" id="pane-lijst">
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-val" id="s-totaal">0</div><div class="stat-lbl">Totaal</div></div>
+    <div class="stat-card"><div class="stat-val" id="s-actief">0</div><div class="stat-lbl">Actief</div></div>
+    <div class="stat-card"><div class="stat-val" id="s-vandaag">0</div><div class="stat-lbl">Vandaag</div></div>
+  </div>
+  <div class="search-row">
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="zoek" placeholder="Zoek op naam of adres…" oninput="renderLijst()">
+    </div>
+    <select id="filter-status" style="max-width:130px" onchange="renderLijst()">
+      <option value="all">Allen</option>
+      <option value="actief">Actief</option>
+      <option value="inactief">Inactief</option>
+    </select>
+  </div>
+  <div id="patient-lijst"></div>
+</div>
+
+<!-- ══════════════════ RONDES ══════════════════ -->
+<div class="pane" id="pane-rondes">
+  <div class="card">
+    <div class="section-title">Planningsdatum</div>
+    <div class="toolbar">
+      <div class="field" style="flex:1">
+        <label>Datum</label>
+        <input type="date" id="ronde-datum">
+      </div>
+      <div class="field" style="max-width:90px">
+        <label>Rondes ochtend</label>
+        <select id="n-rondes">
+          <option value="3">3</option>
+          <option value="4">4</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:10px">
+      <button class="btn btn-primary btn-full" onclick="genereerRondes()">✦ Genereer optimale rondes</button>
+    </div>
+  </div>
+  <div id="rondes-resultaat"></div>
+</div>
+
+<!-- ══════════════════ NIEUWE PATIËNT ══════════════════ -->
+<div class="pane" id="pane-nieuw">
+  <div class="card">
+    <div class="section-title">Basisgegevens</div>
+    <div class="form-grid">
+      <div class="field"><label>Voornaam *</label><input type="text" id="f-voornaam" placeholder="Maria"></div>
+      <div class="field"><label>Achternaam *</label><input type="text" id="f-naam" placeholder="Declercq"></div>
+    </div>
+    <div class="field" style="margin-top:10px">
+      <label>Adres (straat, gemeente)</label>
+      <input type="text" id="f-adres" placeholder="Kerkstraat 12, Ichtegem">
+    </div>
+    <div class="form-grid-3" style="margin-top:10px">
+      <div class="field"><label>Geboortedatum</label><input type="date" id="f-geb"></div>
+      <div class="field"><label>Telefoon</label><input type="tel" id="f-tel" placeholder="051 58 …"></div>
+      <div class="field"><label>Status</label>
+        <select id="f-status">
+          <option value="actief">Actief</option>
+          <option value="inactief">Inactief</option>
+        </select>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="section-title">Verzorging & planning</div>
+    <div class="form-grid">
+      <div class="field"><label>Gewenste uren — van</label><input type="time" id="f-van" value="07:00"></div>
+      <div class="field"><label>Gewenste uren — tot</label><input type="time" id="f-tot" value="09:30"></div>
+    </div>
+    <div class="form-grid" style="margin-top:10px">
+      <div class="field"><label>Gem. duur zorg (min)</label><input type="number" id="f-duur" value="30" min="5" max="180"></div>
+      <div class="field"><label>Ronde</label>
+        <select id="f-ronde">
+          <option value="ochtend">Ochtend</option>
+          <option value="avond">Avond</option>
+          <option value="beide">Beide (ochtend + avond)</option>
+        </select>
+      </div>
+    </div>
+    <div class="field" style="margin-top:10px">
+      <label>Verpleegkundige zorgen</label>
+      <textarea id="f-zorgen" placeholder="bv. wondverzorging, bloeddruk meten, injectie insuline, stoma…"></textarea>
+    </div>
+  </div>
+  <div class="card">
+    <div class="section-title">Afwezigheden & medisch profiel</div>
+    <div class="field">
+      <label>Afwezig op (dag + activiteit)</label>
+      <input type="text" id="f-afwezig" placeholder="bv. maandag kapper, woensdag kine">
+    </div>
+    <div class="field" style="margin-top:10px">
+      <label>Medisch profiel</label>
+      <input type="text" id="f-medisch" placeholder="bv. diabeet, hartlijder, anticoagulantia, COPD…">
+    </div>
+    <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border)">
+      <div class="section-title" style="margin-bottom:8px">GPS coördinaten (optioneel — voor optimale routeplanning)</div>
+      <div class="form-grid">
+        <div class="field"><label>Breedtegraad (lat)</label><input type="number" id="f-lat" step="0.0001" placeholder="51.0765"></div>
+        <div class="field"><label>Lengtegraad (lon)</label><input type="number" id="f-lon" step="0.0001" placeholder="3.0058"></div>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:6px">
+        💡 Tip: zoek het adres op <a href="https://www.google.be/maps" target="_blank" style="color:var(--green)">Google Maps</a>, klik rechts op de locatie en kopieer de coördinaten.
+      </div>
+    </div>
+  </div>
+  <button class="btn btn-primary btn-full" onclick="slaPatientOp()">💾 Patiënt opslaan</button>
+  <div class="success-msg" id="save-ok"></div>
+</div>
+
+<!-- ══════════════════ BEHEER / INSTELLINGEN ══════════════════ -->
+<div class="pane" id="pane-instellingen">
+  <div class="card">
+    <div class="section-title">Data exporteren & importeren</div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">
+      Exporteer je patiëntenlijst als JSON-bestand om een backup te maken of over te zetten naar een ander apparaat (bv. je iPhone).
+    </p>
+    <div class="data-actions">
+      <button class="btn btn-outline btn-full" onclick="exportData()">⬇️ Exporteer data</button>
+      <label class="btn btn-full" style="cursor:pointer;justify-content:center">
+        ⬆️ Importeer data
+        <input type="file" accept=".json" id="import-file" style="display:none" onchange="importData(event)">
+      </label>
+    </div>
+    <div id="import-msg" style="display:none;margin-top:8px;font-size:13px;color:var(--green)"></div>
+  </div>
+  <div class="card">
+    <div class="section-title">App installeren op iPhone</div>
+    <ol style="font-size:13px;color:var(--text-muted);line-height:2;padding-left:18px">
+      <li>Open deze app in <strong>Safari</strong> op je iPhone</li>
+      <li>Tik onderaan op het <strong>Deel-icoon</strong> (vierkantje met pijl omhoog)</li>
+      <li>Scroll naar beneden en tik op <strong>"Zet op beginscherm"</strong></li>
+      <li>Tik op <strong>"Voeg toe"</strong> rechtsboven</li>
+    </ol>
+    <div style="margin-top:10px;padding:10px;background:var(--green-pale);border-radius:var(--radius-sm);font-size:12px;color:var(--green)">
+      ✓ De app werkt daarna ook offline — je data blijft bewaard op je toestel.
+    </div>
+  </div>
+  <div class="card">
+    <div class="section-title">Versiebeheer</div>
+    <div style="font-size:13px;color:var(--text-muted)">
+      VP Planning v1.0 · Data opgeslagen lokaal op dit apparaat
+    </div>
+    <button class="btn btn-danger btn-sm" style="margin-top:10px" onclick="resetData()">🗑 Alle data wissen</button>
+  </div>
+</div>
+
+<script>
+// ── DATA ─────────────────────────────────────────────────────────
+const STORAGE_KEY = 'vp_patients_v1';
+const DAYS_NL = ['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];
+const MONTHS_NL = ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
+
+let patienten = loadData();
+let editId = null;
+
+function loadData() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || defaultPatients();
+  } catch(e) { return defaultPatients(); }
+}
+
+function saveData() { localStorage.setItem(STORAGE_KEY, JSON.stringify(patienten)); }
+
+function defaultPatients() {
+  return [
+    {id:1,voornaam:'Maria',naam:'Declercq',adres:'Kerkstraat 12, Ichtegem',geb:'1942-03-15',tel:'051 58 12 34',status:'actief',van:'07:30',tot:'09:00',duur:40,ronde:'ochtend',zorgen:'Bloeddruk meten, wondverzorging been',afwezig:'woensdag kapper',medisch:'Diabeet, hartlijder',lat:51.076,lon:3.006},
+    {id:2,voornaam:'Jef',naam:'Vandenberghe',adres:'Marktplein 5, Eernegem',geb:'1938-07-22',tel:'051 56 78 90',status:'actief',van:'08:00',tot:'10:00',duur:25,ronde:'ochtend',zorgen:'Injectie insuline, stoma verzorging',afwezig:'dinsdag kine',medisch:'Diabeet type 2',lat:51.089,lon:3.024},
+    {id:3,voornaam:'Rosa',naam:'Maes',adres:'Dorpsstraat 33, Bekegem',geb:'1950-12-03',tel:'051 58 44 55',status:'actief',van:'07:00',tot:'08:30',duur:30,ronde:'beide',zorgen:'Wassen en kleden, medicatie toediening',afwezig:'vrijdag dokter',medisch:'COPD, mobiliteitsproblemen',lat:51.062,lon:2.998},
+    {id:4,voornaam:'André',naam:'Pieters',adres:'Lindenlaan 8, Ichtegem',geb:'1935-05-10',tel:'051 58 66 77',status:'actief',van:'17:00',tot:'20:00',duur:35,ronde:'avond',zorgen:'Wondverzorging, compressie verbanden',afwezig:'',medisch:'Perifeer arterieel lijden',lat:51.073,lon:3.012},
+    {id:5,voornaam:'Simone',naam:'Leclercq',adres:'Stationsstraat 19, Ichtegem',geb:'1948-08-06',tel:'051 58 33 22',status:'inactief',van:'08:00',tot:'10:00',duur:20,ronde:'ochtend',zorgen:'Bloedafname',afwezig:'',medisch:'Anticoagulantia',lat:51.080,lon:3.008}
+  ];
+}
+
+let nextId = () => Math.max(0, ...patienten.map(p => p.id)) + 1;
+
+// ── INIT ─────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  initHeader();
+  renderLijst();
+  document.getElementById('ronde-datum').valueAsDate = new Date();
+  checkBirthdays();
+  registerSW();
+  checkInstallPrompt();
+});
+
+function initHeader() {
+  const d = new Date();
+  document.getElementById('header-date').textContent =
+    DAYS_NL[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS_NL[d.getMonth()] + ' ' + d.getFullYear();
+}
+
+function registerSW() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
+}
+
+function checkInstallPrompt() {
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isStandalone = window.navigator.standalone === true;
+  if (isIOS && !isStandalone) {
+    document.getElementById('install-banner').style.display = 'flex';
+  }
+}
+
+// ── BIRTHDAY CHECK ────────────────────────────────────────────────
+function checkBirthdays() {
+  const d = new Date();
+  const jarig = patienten.filter(p => {
+    if (!p.geb || p.status !== 'actief') return false;
+    const [,m,dd] = p.geb.split('-').map(Number);
+    return m === d.getMonth()+1 && dd === d.getDate();
+  });
+  if (jarig.length) {
+    const namen = jarig.map(p => p.voornaam + ' ' + p.naam).join(' & ');
+    document.getElementById('birthday-text').textContent = 'Vandaag jarig: ' + namen;
+    document.getElementById('birthday-banner').style.display = 'flex';
+  }
+}
+
+// ── TABS ──────────────────────────────────────────────────────────
+function showTab(t) {
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(tb => tb.classList.remove('active'));
+  document.getElementById('pane-' + t).classList.add('active');
+  document.getElementById('tab-' + t).classList.add('active');
+  if (t === 'lijst') renderLijst();
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────
+function initials(p) { return ((p.voornaam||'')[0]||'') + ((p.naam||'')[0]||''); }
+
+function leeftijd(geb) {
+  if (!geb) return null;
+  return Math.floor((new Date() - new Date(geb + 'T12:00:00')) / 31557600000);
+}
+
+function afwezigOp(p, dagNaam) {
+  if (!p.afwezig) return false;
+  return p.afwezig.toLowerCase().includes(dagNaam.toLowerCase());
+}
+
+function dist(a, b) {
+  if (!a.lat || !b.lat) return 999;
+  const R = 6371;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLon = (b.lon - a.lon) * Math.PI / 180;
+  const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180) * Math.cos(b.lat*Math.PI/180) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
+}
+
+function optimaliseerRoute(pts, start) {
+  if (pts.length <= 1) return pts;
+  let remaining = [...pts], route = [], cur = start || {lat:51.076, lon:3.006};
+  while (remaining.length) {
+    remaining.sort((a, b) => dist(cur, a) - dist(cur, b));
+    route.push(remaining.shift());
+    cur = route[route.length - 1];
+  }
+  return route;
+}
+
+// ── PATIËNTENLIJST ────────────────────────────────────────────────
+function renderLijst() {
+  const q = (document.getElementById('zoek').value || '').toLowerCase();
+  const fs = document.getElementById('filter-status').value;
+  const vandaag = DAYS_NL[new Date().getDay()];
+
+  const gefilterd = patienten.filter(p => {
+    const nm = (p.voornaam + ' ' + p.naam).toLowerCase();
+    const adr = (p.adres || '').toLowerCase();
+    return (nm.includes(q) || adr.includes(q)) && (fs === 'all' || p.status === fs);
+  });
+
+  const actief = patienten.filter(p => p.status === 'actief');
+  const vandaagActief = actief.filter(p => !afwezigOp(p, vandaag));
+  document.getElementById('s-totaal').textContent = patienten.length;
+  document.getElementById('s-actief').textContent = actief.length;
+  document.getElementById('s-vandaag').textContent = vandaagActief.length;
+
+  const el = document.getElementById('patient-lijst');
+  if (!gefilterd.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">👥</div><p>Geen patiënten gevonden</p></div>`;
+    return;
+  }
+
+  el.innerHTML = gefilterd.map(p => {
+    const age = leeftijd(p.geb);
+    return `
+    <div class="patient-item" style="margin-bottom:8px">
+      <div class="patient-header" onclick="toggleDetail(${p.id})">
+        <div class="avatar">${initials(p)}</div>
+        <div style="flex:1">
+          <div class="patient-name">${p.voornaam} ${p.naam}${age ? ' <span style="font-weight:300;color:var(--text-muted);font-size:12px">· ${age} j</span>' : ''}</div>
+          <div class="patient-sub">📍 ${p.adres || '—'}</div>
+        </div>
+        <div class="badges">
+          <span class="badge b-${p.status}">${p.status}</span>
+          <span class="badge b-${p.ronde}">${p.ronde}</span>
+        </div>
+      </div>
+      <div class="detail-body" id="det-${p.id}">
+        <div class="detail-grid">
+          <div class="detail-field"><label>Telefoon</label><div class="val">${p.tel || '—'}</div></div>
+          <div class="detail-field"><label>Verzorging</label><div class="val">${p.van} – ${p.tot} · ${p.duur} min</div></div>
+        </div>
+        <div class="detail-field"><label>Verpleegkundige zorgen</label><div class="val">${p.zorgen || '—'}</div></div>
+        ${p.medisch ? `<div class="detail-field"><label>Medisch profiel</label><div class="val"><span class="badge b-med">⚕ ${p.medisch}</span></div></div>` : ''}
+        ${p.afwezig ? `<div class="detail-field"><label>Afwezigheden</label><div class="val">${p.afwezig}</div></div>` : ''}
+        <div class="detail-actions">
+          <button class="btn btn-sm" onclick="bewerkPatient(${p.id})">✏️ Bewerken</button>
+          <button class="btn btn-sm btn-danger" onclick="verwijderPatient(${p.id})">🗑</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleDetail(id) {
+  const el = document.getElementById('det-' + id);
+  const open = el.classList.contains('open');
+  document.querySelectorAll('.detail-body').forEach(d => d.classList.remove('open'));
+  if (!open) el.classList.add('open');
+}
+
+// ── PATIËNT FORMULIER ─────────────────────────────────────────────
+function bewerkPatient(id) {
+  const p = patienten.find(x => x.id === id);
+  if (!p) return;
+  editId = id;
+  const F = n => document.getElementById('f-' + n);
+  F('voornaam').value = p.voornaam || '';
+  F('naam').value = p.naam || '';
+  F('adres').value = p.adres || '';
+  F('geb').value = p.geb || '';
+  F('tel').value = p.tel || '';
+  F('status').value = p.status || 'actief';
+  F('van').value = p.van || '07:00';
+  F('tot').value = p.tot || '09:30';
+  F('duur').value = p.duur || 30;
+  F('ronde').value = p.ronde || 'ochtend';
+  F('zorgen').value = p.zorgen || '';
+  F('afwezig').value = p.afwezig || '';
+  F('medisch').value = p.medisch || '';
+  F('lat').value = p.lat || '';
+  F('lon').value = p.lon || '';
+  showTab('nieuw');
+  document.getElementById('pane-nieuw').scrollTo(0, 0);
+  window.scrollTo(0, 0);
+}
+
+function verwijderPatient(id, stil) {
+  if (!stil && !confirm('Patiënt verwijderen?')) return;
+  patienten = patienten.filter(p => p.id !== id);
+  saveData();
+  renderLijst();
+}
+
+function slaPatientOp() {
+  const F = n => document.getElementById('f-' + n).value.trim();
+  const voornaam = F('voornaam'), naam = F('naam');
+  if (!voornaam || !naam) { alert('Voornaam en naam zijn verplicht.'); return; }
+
+  const p = {
+    id: editId || nextId(),
+    voornaam, naam,
+    adres: F('adres'),
+    geb: F('geb'),
+    tel: F('tel'),
+    status: document.getElementById('f-status').value,
+    van: document.getElementById('f-van').value,
+    tot: document.getElementById('f-tot').value,
+    duur: parseInt(document.getElementById('f-duur').value) || 30,
+    ronde: document.getElementById('f-ronde').value,
+    zorgen: F('zorgen'),
+    afwezig: F('afwezig'),
+    medisch: F('medisch'),
+    lat: parseFloat(F('lat')) || null,
+    lon: parseFloat(F('lon')) || null
+  };
+
+  if (editId) {
+    patienten = patienten.map(x => x.id === editId ? p : x);
+  } else {
+    patienten.push(p);
+  }
+  saveData();
+  editId = null;
+
+  // reset form
+  ['voornaam','naam','adres','geb','tel','zorgen','afwezig','medisch','lat','lon'].forEach(f => {
+    document.getElementById('f-' + f).value = '';
+  });
+  document.getElementById('f-duur').value = '30';
+  document.getElementById('f-van').value = '07:00';
+  document.getElementById('f-tot').value = '09:30';
+  document.getElementById('f-status').value = 'actief';
+  document.getElementById('f-ronde').value = 'ochtend';
+
+  const msg = document.getElementById('save-ok');
+  msg.textContent = '✓ ' + p.voornaam + ' ' + p.naam + (editId ? ' bijgewerkt' : ' opgeslagen');
+  msg.style.display = 'block';
+  setTimeout(() => msg.style.display = 'none', 3000);
+  showTab('lijst');
+}
+
+// ── RONDES GENERATOR ──────────────────────────────────────────────
+function genereerRondes() {
+  const datum = document.getElementById('ronde-datum').value;
+  const d = datum ? new Date(datum + 'T12:00:00') : new Date();
+  const dagNaam = DAYS_NL[d.getDay()];
+  const nRondes = parseInt(document.getElementById('n-rondes').value) || 3;
+
+  const actief = patienten.filter(p => p.status === 'actief' && !afwezigOp(p, dagNaam));
+  const ochtend = optimaliseerRoute(actief.filter(p => p.ronde === 'ochtend' || p.ronde === 'beide'));
+  const avond = optimaliseerRoute(actief.filter(p => p.ronde === 'avond' || p.ronde === 'beide'));
+
+  // Verdeel ochtendpatiënten over rondes
+  const rondeGroepen = Array.from({length: nRondes}, () => []);
+  ochtend.forEach((p, i) => rondeGroepen[i % nRondes].push(p));
+
+  const startUren = ['07:00','07:30','08:00','08:30'];
+  const rondes = rondeGroepen
+    .map((pts, i) => ({label: `Ronde ${i+1} — ochtend`, klasse: 'ochtend', patienten: pts, start: startUren[i] || '07:00'}))
+    .filter(r => r.patienten.length > 0);
+
+  if (avond.length) {
+    rondes.push({label: 'Avond ronde', klasse: 'avond', patienten: avond, start: '17:00'});
+  }
+
+  const el = document.getElementById('rondes-resultaat');
+  if (!rondes.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">🗺</div><p>Geen actieve patiënten voor ${dagNaam}.</p></div>`;
+    return;
+  }
+
+  el.innerHTML = rondes.map(r => {
+    const totMin = r.patienten.reduce((s, p) => s + p.duur, 0);
+    const uur = Math.floor(totMin/60), min = totMin%60;
+    const duurStr = uur > 0 ? `${uur}u${min > 0 ? min+'m' : ''}` : `${min} min`;
+    const stops = r.patienten.map((p, i) => `
+      <div class="stop-row">
+        <div class="stop-num">${i+1}</div>
+        <div style="flex:1">
+          <div class="stop-name">${p.voornaam} ${p.naam}</div>
+          <div class="stop-detail">📍 ${p.adres || '—'} · ${p.duur} min</div>
+          <div class="stop-detail">${p.zorgen || '—'}</div>
+          ${p.medisch ? `<span class="badge b-med" style="margin-top:3px;display:inline-block">⚕ ${p.medisch}</span>` : ''}
+        </div>
+        <div class="stop-time">${p.van}–${p.tot}</div>
+      </div>`).join('');
+
+    return `
+    <div class="ronde-block">
+      <div class="ronde-head">
+        <span style="font-size:18px">${r.klasse === 'avond' ? '🌙' : '☀️'}</span>
+        <div class="ronde-head-title">${r.label}</div>
+        <div class="ronde-meta">${r.patienten.length} pat. · ~${duurStr} · start ${r.start}</div>
+      </div>
+      ${stops}
+    </div>`;
+  }).join('');
+}
+
+// ── EXPORT / IMPORT ───────────────────────────────────────────────
+function exportData() {
+  const json = JSON.stringify(patienten, null, 2);
+  const blob = new Blob([json], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'vp-planning-backup-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!Array.isArray(data)) throw new Error();
+      if (confirm(`${data.length} patiënten importeren? Bestaande data wordt overschreven.`)) {
+        patienten = data;
+        saveData();
+        renderLijst();
+        document.getElementById('import-msg').textContent = '✓ ' + data.length + ' patiënten geïmporteerd.';
+        document.getElementById('import-msg').style.display = 'block';
+        setTimeout(() => document.getElementById('import-msg').style.display = 'none', 4000);
+      }
+    } catch(err) {
+      alert('Ongeldig bestand. Gebruik een eerder geëxporteerd VP Planning bestand.');
+    }
+  };
+  reader.readAsText(file);
+  evt.target.value = '';
+}
+
+function resetData() {
+  if (confirm('Alle patiëntendata wissen? Dit kan niet ongedaan worden.')) {
+    localStorage.removeItem(STORAGE_KEY);
+    patienten = [];
+    saveData();
+    renderLijst();
+  }
+}
+</script>
+</body>
+</html>
