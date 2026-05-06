@@ -1102,26 +1102,61 @@ async function sbFetch(path, options) {
 async function laadVanCloud() {
   setSyncStatus('bezig', 'Laden uit cloud…');
   const rows = await sbFetch('patienten?select=id,data&order=updated_at.desc&limit=1');
+
+  const lokaalAantal = patienten.filter(p => p.id).length;
+
   if (!rows || !rows.length) {
-    // Geen data in cloud — upload lokale data
-    await slaOpInCloud(patienten);
-    setSyncStatus('ok', 'Gesynchroniseerd — ' + new Date().toLocaleTimeString('nl-BE'));
+    // Cloud is volledig leeg — upload lokale data als die bestaat
+    if (lokaalAantal > 0) {
+      await slaOpInCloud(patienten);
+      setSyncStatus('ok', lokaalAantal + ' patiënten geüpload naar cloud');
+    } else {
+      setSyncStatus('ok', 'Gesynchroniseerd — cloud en lokaal zijn leeg');
+    }
     return;
   }
+
   const row = rows[0];
   localStorage.setItem(SB_ROW_KEY, row.id);
   const cloudData = Array.isArray(row.data) ? row.data : [];
+  const cloudAantal = cloudData.filter(p => p.id).length;
+
+  // VEILIGHEID: nooit lokale data overschrijven met minder of lege clouddata
+  if (cloudAantal === 0 && lokaalAantal > 0) {
+    // Cloud is leeg maar lokaal hebben we data — upload lokale naar cloud
+    await slaOpInCloud(patienten);
+    setSyncStatus('ok', lokaalAantal + ' lokale patiënten geüpload naar cloud');
+    return;
+  }
+
+  if (cloudAantal < lokaalAantal) {
+    // Cloud heeft minder patiënten dan lokaal — upload lokale versie
+    await slaOpInCloud(patienten);
+    setSyncStatus('ok', 'Lokale data (meer records) geüpload naar cloud');
+    return;
+  }
+
+  // Cloud heeft evenveel of meer data — laad van cloud
   patienten = cloudData.map(p => ({
     geslacht: '', frequentie: { type: 'dagelijks' }, dagSchema: {}, tijdsSchema: {}, ...p
   }));
   localStorage.setItem(STORAGE_KEY, JSON.stringify(patienten));
-  setSyncStatus('ok', 'Gesynchroniseerd — ' + new Date().toLocaleTimeString('nl-BE'));
+  setSyncStatus('ok', 'Gesynchroniseerd — ' + cloudAantal + ' patiënten geladen');
   renderLijst();
   checkBirthdays();
 }
 
 async function slaOpInCloud(data) {
+  // VEILIGHEID: nooit een lege lijst uploaden als we al data in de cloud hebben
   const rowId = localStorage.getItem(SB_ROW_KEY);
+  if (data.length === 0 && rowId) {
+    const bestaand = await sbFetch('patienten?select=data&id=eq.' + rowId).catch(() => []);
+    const bestaandAantal = bestaand && bestaand[0] && Array.isArray(bestaand[0].data) ? bestaand[0].data.length : 0;
+    if (bestaandAantal > 0) {
+      setSyncStatus('fout', 'Geannuleerd — zou ' + bestaandAantal + ' patiënten wissen');
+      return;
+    }
+  }
   if (rowId) {
     await sbFetch('patienten?id=eq.' + rowId, {
       method: 'PATCH',
