@@ -415,6 +415,18 @@ textarea { resize: vertical; min-height: 70px; }
 
 <!-- ══════════════════ NIEUWE PATIËNT ══════════════════ -->
 <div class="pane" id="pane-nieuw">
+
+  <!-- FOTO IMPORT BANNER -->
+  <div class="card" style="border:1.5px dashed var(--green-mid);background:var(--green-pale)">
+    <div class="section-title" style="color:var(--green)">📷 Patiënt importeren via foto</div>
+    <p style="font-size:13px;color:var(--text-muted);margin:6px 0 10px">Maak een screenshot van je andere app en upload die hier. Claude leest de gegevens automatisch uit en vult het formulier in.</p>
+    <label class="btn btn-primary btn-full" style="cursor:pointer;justify-content:center" id="foto-label">
+      📷 Kies screenshot of foto
+      <input type="file" accept="image/*" id="foto-input" style="display:none" onchange="importeerViaFoto(event)">
+    </label>
+    <div id="foto-status" style="display:none;margin-top:8px;font-size:13px;padding:8px 10px;border-radius:var(--radius-sm)"></div>
+  </div>
+
   <div class="card">
     <div class="section-title">Basisgegevens</div>
     <div class="form-grid">
@@ -566,6 +578,20 @@ textarea { resize: vertical; min-height: 70px; }
 
 <!-- ══════════════════ BEHEER / INSTELLINGEN ══════════════════ -->
 <div class="pane" id="pane-instellingen">
+  <div class="card">
+    <div class="section-title">Anthropic API-sleutel <span style="font-weight:300;font-size:10px;color:var(--text-muted)">— nodig voor foto-import</span></div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:10px">
+      Vereist voor het automatisch uitlezen van patiëntgegevens uit een screenshot. Haal je sleutel op via <a href="https://console.anthropic.com" target="_blank" style="color:var(--green)">console.anthropic.com</a> → API Keys.
+    </p>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input type="password" id="api-key-input" placeholder="sk-ant-..." style="flex:1;font-size:13px">
+      <button class="btn btn-primary" onclick="slaApiKeyOp()">Opslaan</button>
+    </div>
+    <div id="api-key-status" style="font-size:12px;margin-top:6px;display:none"></div>
+    <div style="margin-top:8px;font-size:11px;color:var(--text-muted)">
+      🔒 De sleutel wordt alleen lokaal op dit toestel bewaard en rechtstreeks naar Anthropic gestuurd — nooit naar een andere server.
+    </div>
+  </div>
   <div class="card">
     <div class="section-title">Data exporteren & importeren</div>
     <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">
@@ -749,7 +775,140 @@ async function zoekCoordinaten() {
   }
 }
 
-// ── RONDE UREN TOGGLE ─────────────────────────────────────────────
+// ── API SLEUTEL ───────────────────────────────────────────────────
+const API_KEY_STORAGE = 'vp_api_key';
+
+function slaApiKeyOp() {
+  const key = document.getElementById('api-key-input').value.trim();
+  const status = document.getElementById('api-key-status');
+  if (!key.startsWith('sk-ant-')) {
+    status.style.display = 'block';
+    status.style.color = 'var(--red)';
+    status.textContent = '✗ Ongeldige sleutel. Een Anthropic API-sleutel begint met sk-ant-';
+    return;
+  }
+  localStorage.setItem(API_KEY_STORAGE, key);
+  status.style.display = 'block';
+  status.style.color = 'var(--green)';
+  status.textContent = '✓ Sleutel opgeslagen';
+  document.getElementById('api-key-input').value = '';
+  setTimeout(() => status.style.display = 'none', 3000);
+}
+
+function getApiKey() {
+  return localStorage.getItem(API_KEY_STORAGE) || '';
+}
+
+// ── FOTO IMPORT ───────────────────────────────────────────────────
+async function importeerViaFoto(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+  evt.target.value = '';
+
+  const apiKey = getApiKey();
+  const statusEl = document.getElementById('foto-status');
+
+  function setStatus(msg, kleur) {
+    statusEl.style.display = 'block';
+    statusEl.style.background = kleur === 'rood' ? 'var(--red-pale)' : kleur === 'groen' ? 'var(--green-pale)' : 'var(--amber-pale)';
+    statusEl.style.color = kleur === 'rood' ? 'var(--red)' : kleur === 'groen' ? 'var(--green)' : 'var(--amber)';
+    statusEl.textContent = msg;
+  }
+
+  if (!apiKey) {
+    setStatus('⚠ Geen API-sleutel ingesteld. Ga naar Beheer → Anthropic API-sleutel en voeg je sleutel toe.', 'oranje');
+    return;
+  }
+
+  setStatus('⏳ Foto wordt gelezen door AI… even geduld…', 'oranje');
+
+  try {
+    const base64 = await new Promise((res, rej) => {
+      const reader = new FileReader();
+      reader.onload = e => res(e.target.result.split(',')[1]);
+      reader.onerror = () => rej(new Error('Bestand lezen mislukt'));
+      reader.readAsDataURL(file);
+    });
+
+    const mediaType = file.type || 'image/jpeg';
+
+    const prompt = `Je bent een assistent die patiëntgegevens uittrekt uit een screenshot van een verpleegkundige planning-app.
+
+Analyseer de afbeelding zorgvuldig en geef de volgende gegevens terug als JSON. Gebruik null voor ontbrekende velden. Geef ALLEEN de JSON terug, geen uitleg.
+
+{
+  "voornaam": "...",
+  "naam": "...",
+  "adres": "...",
+  "geb": "YYYY-MM-DD of null",
+  "tel": "...",
+  "geslacht": "v of m of x of null"
+}
+
+Notities:
+- adres: volledig adres inclusief gemeente als zichtbaar
+- geb: geboortedatum omzetten naar YYYY-MM-DD formaat
+- geslacht: afleiden uit naam/aanspreking als mogelijk, anders null
+- tel: telefoonnummer zoals weergegeven`;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-opus-4-5',
+        max_tokens: 500,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+            { type: 'text', text: prompt }
+          ]
+        }]
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      if (response.status === 401) throw new Error('Ongeldige API-sleutel. Controleer je sleutel in Beheer.');
+      if (response.status === 429) throw new Error('Te veel aanvragen. Wacht even en probeer opnieuw.');
+      throw new Error(err.error?.message || 'API-fout: ' + response.status);
+    }
+
+    const data = await response.json();
+    const tekst = data.content.map(b => b.text || '').join('');
+    const jsonMatch = tekst.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('AI kon geen gegevens herkennen in deze afbeelding.');
+
+    const gevonden = JSON.parse(jsonMatch[0]);
+
+    // Formulier invullen
+    const F = id => document.getElementById(id);
+    if (gevonden.voornaam) F('f-voornaam').value = gevonden.voornaam;
+    if (gevonden.naam) F('f-naam').value = gevonden.naam;
+    if (gevonden.adres) F('f-adres').value = gevonden.adres;
+    if (gevonden.geb) F('f-geb').value = gevonden.geb;
+    if (gevonden.tel) F('f-tel').value = gevonden.tel;
+    if (gevonden.geslacht) F('f-geslacht').value = gevonden.geslacht;
+
+    const ingevuld = [gevonden.voornaam, gevonden.naam, gevonden.adres, gevonden.geb, gevonden.tel]
+      .filter(Boolean).length;
+
+    setStatus('✓ ' + ingevuld + ' velden ingevuld. Controleer de gegevens en vul de rest aan.', 'groen');
+
+    // Automatisch coördinaten ophalen als adres gevonden
+    if (gevonden.adres) {
+      setTimeout(() => zoekCoordinaten(), 500);
+    }
+
+  } catch (e) {
+    setStatus('✗ ' + e.message, 'rood');
+  }
+}
 function toggleRondeUren() {
   const ronde = document.getElementById('f-ronde').value;
   document.getElementById('uren-ochtend').style.display = (ronde === 'ochtend' || ronde === 'beide') ? 'block' : 'none';
@@ -960,6 +1119,13 @@ function showTab(t) {
   document.getElementById('pane-' + t).classList.add('active');
   document.getElementById('tab-' + t).classList.add('active');
   if (t === 'lijst') renderLijst();
+  if (t === 'instellingen') {
+    const hasKey = !!getApiKey();
+    const s = document.getElementById('api-key-status');
+    s.style.display = 'block';
+    s.style.color = hasKey ? 'var(--green)' : 'var(--text-muted)';
+    s.textContent = hasKey ? '✓ API-sleutel is ingesteld' : 'Nog geen sleutel ingesteld';
+  }
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────
