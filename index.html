@@ -762,7 +762,17 @@ let editId = null;
 
 function loadData() {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || defaultPatients();
+    const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (data && Array.isArray(data)) {
+      // Migratie: voeg ontbrekende velden toe aan bestaande patiënten
+      return data.map(p => ({
+        geslacht: '',
+        frequentie: { type: 'dagelijks' },
+        dagSchema: {},
+        ...p
+      }));
+    }
+    return defaultPatients();
   } catch(e) { return defaultPatients(); }
 }
 
@@ -896,12 +906,16 @@ function renderLijst() {
   el.innerHTML = gefilterd.map(p => {
     const age = leeftijd(p.geb);
     const gsl = geslachtLabel(p.geslacht);
+    const ageStr = age ? ' <span style="font-weight:300;color:var(--text-muted);font-size:12px">\xb7 ' + age + ' j</span>' : '';
+    const gslStr = gsl ? ' <span style="font-size:11px;color:var(--text-muted)">' + gsl + '</span>' : '';
+    const medStr = p.medisch ? '<div class="detail-field"><label>Medisch profiel</label><div class="val"><span class="badge b-med">\u2695 ' + p.medisch + '</span></div></div>' : '';
+    const afwStr = p.afwezig ? '<div class="detail-field"><label>Afwezigheden</label><div class="val">' + p.afwezig + '</div></div>' : '';
     return `
     <div class="patient-item" style="margin-bottom:8px">
       <div class="patient-header" onclick="toggleDetail(${p.id})">
         <div class="avatar">${initials(p)}</div>
         <div style="flex:1">
-          <div class="patient-name">${p.voornaam} ${p.naam}${age ? ' <span style="font-weight:300;color:var(--text-muted);font-size:12px">· ${age} j</span>' : ''}${gsl ? ' <span style="font-size:11px;color:var(--text-muted)">' + gsl + '</span>' : ''}</div>
+          <div class="patient-name">${p.voornaam} ${p.naam}${ageStr}${gslStr}</div>
           <div class="patient-sub">📍 ${p.adres || '—'}</div>
         </div>
         <div class="badges">
@@ -919,8 +933,8 @@ function renderLijst() {
           <div class="detail-field"><label>Frequentie</label><div class="val">${freqOmschrijving(p.frequentie)}</div></div>
         </div>
         <div class="detail-field"><label>Verpleegkundige zorgen</label><div class="val">${p.zorgen || '—'}</div></div>
-        ${p.medisch ? `<div class="detail-field"><label>Medisch profiel</label><div class="val"><span class="badge b-med">⚕ ${p.medisch}</span></div></div>` : ''}
-        ${p.afwezig ? `<div class="detail-field"><label>Afwezigheden</label><div class="val">${p.afwezig}</div></div>` : ''}
+        ${medStr}
+        ${afwStr}
         <div class="detail-actions">
           <button class="btn btn-sm" onclick="bewerkPatient(${p.id})">✏️ Bewerken</button>
           <button class="btn btn-sm btn-danger" onclick="verwijderPatient(${p.id})">🗑</button>
@@ -1072,17 +1086,21 @@ function genereerRondes() {
     const totMin = r.patienten.reduce((s, p) => s + p.duurVandaag, 0);
     const uur = Math.floor(totMin/60), min = totMin%60;
     const duurStr = uur > 0 ? `${uur}u${min > 0 ? min+'m' : ''}` : `${min} min`;
-    const stops = r.patienten.map((p, i) => `
+    const stops = r.patienten.map((p, i) => {
+      const afwijkingStr = p.heeftDagAfwijking ? ' <span style="font-size:10px;color:var(--amber);background:var(--amber-pale);padding:1px 6px;border-radius:10px">dag-schema</span>' : '';
+      const medStr = p.medisch ? '<span class="badge b-med" style="margin-top:3px;display:inline-block">\u2695 ' + p.medisch + '</span>' : '';
+      return `
       <div class="stop-row">
         <div class="stop-num">${i+1}</div>
         <div style="flex:1">
           <div class="stop-name">${p.voornaam} ${p.naam}</div>
-          <div class="stop-detail">📍 ${p.adres || '—'} · <strong>${p.duurVandaag} min</strong>${p.heeftDagAfwijking ? ' <span style="font-size:10px;color:var(--amber);background:var(--amber-pale);padding:1px 6px;border-radius:10px">dag-schema</span>' : ''}</div>
+          <div class="stop-detail">📍 ${p.adres || '—'} · <strong>${p.duurVandaag} min</strong>${afwijkingStr}</div>
           <div class="stop-detail">${p.zorgenVandaag || '—'}</div>
-          ${p.medisch ? `<span class="badge b-med" style="margin-top:3px;display:inline-block">⚕ ${p.medisch}</span>` : ''}
+          ${medStr}
         </div>
         <div class="stop-time">${p.van}–${p.tot}</div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
 
     return `
     <div class="ronde-block">
