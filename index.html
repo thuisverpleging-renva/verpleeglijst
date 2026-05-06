@@ -742,6 +742,8 @@ function freqOmschrijving(freq) {
   if (freq.type === 'interval-week') return `Om de ${freq.interval} weken${freq.dag ? ' op ' + freq.dag : ''}`;
   return '—';
 }
+
+function duurOpDatum(p, datum) {
   const dag = DAYS_SHORT[datum.getDay()];
   if (p.dagSchema && p.dagSchema[dag] && p.dagSchema[dag].actief && p.dagSchema[dag].duur) {
     return p.dagSchema[dag].duur;
