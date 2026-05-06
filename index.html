@@ -524,24 +524,30 @@ textarea { resize: vertical; min-height: 70px; }
     <div class="dag-schema" id="dag-schema-form"></div>
   </div>
   <div class="card">
-    <div class="section-title">Afwezigheden & medisch profiel</div>
+    <div class="section-title">Afwezigheden & tijdsbeperkingen</div>
     <div class="field">
       <label>Afwezig op (dag + activiteit)</label>
       <input type="text" id="f-afwezig" placeholder="bv. maandag kapper, woensdag kine">
     </div>
-    <div class="field" style="margin-top:10px">
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+      <div class="section-title" style="margin-bottom:6px">Tijdsbeperkingen per dag <span style="font-weight:300;font-size:10px;color:var(--text-muted)">(optioneel)</span></div>
+      <p class="schema-hint" style="margin-bottom:8px">Vink een dag aan als er een tijdsbeperking geldt, bv. "klaar vóór 10:00" of "niet vóór 09:00".</p>
+      <div id="tijds-schema-form" style="display:flex;flex-direction:column;gap:6px"></div>
+    </div>
+    <div class="field" style="margin-top:12px">
       <label>Medisch profiel</label>
       <input type="text" id="f-medisch" placeholder="bv. diabeet, hartlijder, anticoagulantia, COPD…">
     </div>
-    <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border)">
-      <div class="section-title" style="margin-bottom:8px">GPS coördinaten (optioneel — voor optimale routeplanning)</div>
-      <div class="form-grid">
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+      <div class="section-title" style="margin-bottom:8px">GPS coördinaten — voor optimale routeplanning</div>
+      <div class="form-grid" style="align-items:flex-end">
         <div class="field"><label>Breedtegraad (lat)</label><input type="number" id="f-lat" step="0.0001" placeholder="51.0765"></div>
         <div class="field"><label>Lengtegraad (lon)</label><input type="number" id="f-lon" step="0.0001" placeholder="3.0058"></div>
       </div>
-      <div style="font-size:11px;color:var(--text-muted);margin-top:6px">
-        💡 Tip: zoek het adres op <a href="https://www.google.be/maps" target="_blank" style="color:var(--green)">Google Maps</a>, klik rechts op de locatie en kopieer de coördinaten.
-      </div>
+      <button type="button" class="btn btn-outline btn-full" style="margin-top:8px" onclick="zoekCoordinaten()">
+        📍 Haal coördinaten automatisch op uit adres
+      </button>
+      <div id="geo-status" style="font-size:12px;margin-top:6px;display:none"></div>
     </div>
   </div>
   <button class="btn btn-primary btn-full" onclick="slaPatientOp()">💾 Patiënt opslaan</button>
@@ -612,6 +618,62 @@ function initDagSchemaForm(bestaand) {
   }).join('');
 }
 
+function initTijdsSchemaForm(bestaand) {
+  const el = document.getElementById('tijds-schema-form');
+  el.innerHTML = DAYS_SHORT.map((d, i) => {
+    const dag = bestaand && bestaand[d];
+    const aan = dag && dag.actief;
+    const vFor = dag && dag.voor ? dag.voor : '';
+    const vNiet = dag && dag.niet ? dag.niet : '';
+    return `
+    <div class="dag-rij${aan ? ' actief' : ''}" id="tijdsr-${d}" style="grid-template-columns:72px 1fr 1fr">
+      <label class="dag-label">
+        <input type="checkbox" class="dag-toggle" id="tijds-cb-${d}" ${aan ? 'checked' : ''} onchange="toggleTijdsRij('${d}')">
+        ${DAYS_NL[i]}
+      </label>
+      <div style="display:flex;align-items:center;gap:4px">
+        <span style="font-size:11px;color:var(--text-muted);white-space:nowrap">klaar v\u00f3\u00f3r</span>
+        <input type="time" id="tijds-voor-${d}" value="${vFor}" ${aan ? '' : 'disabled'} style="flex:1;font-size:12px;padding:4px 6px">
+      </div>
+      <div style="display:flex;align-items:center;gap:4px">
+        <span style="font-size:11px;color:var(--text-muted);white-space:nowrap">niet v\u00f3\u00f3r</span>
+        <input type="time" id="tijds-niet-${d}" value="${vNiet}" ${aan ? '' : 'disabled'} style="flex:1;font-size:12px;padding:4px 6px">
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleTijdsRij(d) {
+  const cb = document.getElementById('tijds-cb-' + d);
+  const rij = document.getElementById('tijdsr-' + d);
+  const voorEl = document.getElementById('tijds-voor-' + d);
+  const nietEl = document.getElementById('tijds-niet-' + d);
+  if (cb.checked) {
+    rij.classList.add('actief');
+    voorEl.disabled = false;
+    nietEl.disabled = false;
+  } else {
+    rij.classList.remove('actief');
+    voorEl.disabled = true;
+    nietEl.disabled = true;
+  }
+}
+
+function leesTijdsSchema() {
+  const schema = {};
+  DAYS_SHORT.forEach(d => {
+    const cb = document.getElementById('tijds-cb-' + d);
+    if (cb && cb.checked) {
+      schema[d] = {
+        actief: true,
+        voor: document.getElementById('tijds-voor-' + d).value || null,
+        niet: document.getElementById('tijds-niet-' + d).value || null
+      };
+    }
+  });
+  return schema;
+}
+
 function toggleDagRij(d) {
   const cb = document.getElementById('dag-cb-' + d);
   const rij = document.getElementById('dagr-' + d);
@@ -643,8 +705,42 @@ function leesDagSchema() {
   return schema;
 }
 
+// ── GEOCODING ─────────────────────────────────────────────────────
+async function zoekCoordinaten() {
+  const adres = document.getElementById('f-adres').value.trim();
+  const status = document.getElementById('geo-status');
+  if (!adres) {
+    status.style.display = 'block';
+    status.style.color = 'var(--amber)';
+    status.textContent = '⚠ Vul eerst een adres in.';
+    return;
+  }
+  status.style.display = 'block';
+  status.style.color = 'var(--text-muted)';
+  status.textContent = '⏳ Zoeken…';
+  try {
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=be&q=' + encodeURIComponent(adres);
+    const res = await fetch(url, { headers: { 'Accept-Language': 'nl', 'User-Agent': 'VP-Planning-App' } });
+    const data = await res.json();
+    if (!data || !data.length) {
+      status.style.color = 'var(--red)';
+      status.textContent = '✗ Adres niet gevonden. Probeer met gemeente erbij (bv. "Kerkstraat 12, Ichtegem").';
+      return;
+    }
+    const lat = parseFloat(parseFloat(data[0].lat).toFixed(5));
+    const lon = parseFloat(parseFloat(data[0].lon).toFixed(5));
+    document.getElementById('f-lat').value = lat;
+    document.getElementById('f-lon').value = lon;
+    status.style.color = 'var(--green)';
+    status.textContent = '✓ Gevonden: ' + data[0].display_name.split(',').slice(0,3).join(',');
+  } catch(e) {
+    status.style.color = 'var(--red)';
+    status.textContent = '✗ Verbindingsfout. Controleer je internetverbinding.';
+  }
+}
+
 function geslachtLabel(g) {
-  return g === 'v' ? '♀ Vrouw' : g === 'm' ? '♂ Man' : g === 'x' ? '⚧ X' : '';
+  return g === 'v' ? '\u2640 Vrouw' : g === 'm' ? '\u2642 Man' : g === 'x' ? '\u26a7 X' : '';
 }
 
 // ── FREQUENTIE FORMULIER ──────────────────────────────────────────
@@ -771,6 +867,7 @@ function loadData() {
         geslacht: '',
         frequentie: { type: 'dagelijks' },
         dagSchema: {},
+        tijdsSchema: {},
         ...p
       }));
     }
@@ -801,6 +898,7 @@ window.addEventListener('load', () => {
   registerSW();
   checkInstallPrompt();
   initDagSchemaForm({});
+  initTijdsSchemaForm({});
 });
 
 function initHeader() {
@@ -976,6 +1074,7 @@ function bewerkPatient(id) {
   F('lat').value = p.lat || '';
   F('lon').value = p.lon || '';
   initDagSchemaForm(p.dagSchema || {});
+  initTijdsSchemaForm(p.tijdsSchema || {});
   laadFrequentie(p.frequentie || null);
   showTab('nieuw');
   document.getElementById('pane-nieuw').scrollTo(0, 0);
@@ -1012,6 +1111,7 @@ function slaPatientOp() {
     lat: parseFloat(F('lat')) || null,
     lon: parseFloat(F('lon')) || null,
     dagSchema: leesDagSchema(),
+    tijdsSchema: leesTijdsSchema(),
     frequentie: leesFrequentie()
   };
 
@@ -1033,6 +1133,7 @@ function slaPatientOp() {
   document.getElementById('f-status').value = 'actief';
   document.getElementById('f-ronde').value = 'ochtend';
   initDagSchemaForm({});
+  initTijdsSchemaForm({});
   laadFrequentie(null);
 
   const msg = document.getElementById('save-ok');
@@ -1060,7 +1161,8 @@ function genereerRondes() {
     ...p,
     duurVandaag: duurOpDatum(p, d),
     zorgenVandaag: zorgenOpDatum(p, d),
-    heeftDagAfwijking: !!(p.dagSchema && p.dagSchema[DAYS_SHORT[d.getDay()]] && p.dagSchema[DAYS_SHORT[d.getDay()]].actief)
+    heeftDagAfwijking: !!(p.dagSchema && p.dagSchema[DAYS_SHORT[d.getDay()]] && p.dagSchema[DAYS_SHORT[d.getDay()]].actief),
+    tijdsBeperking: p.tijdsSchema && p.tijdsSchema[DAYS_SHORT[d.getDay()]] && p.tijdsSchema[DAYS_SHORT[d.getDay()]].actief ? p.tijdsSchema[DAYS_SHORT[d.getDay()]] : null
   }));
 
   const ochtend = optimaliseerRoute(verrijkt.filter(p => p.ronde === 'ochtend' || p.ronde === 'beide'));
@@ -1091,6 +1193,11 @@ function genereerRondes() {
     const stops = r.patienten.map((p, i) => {
       const afwijkingStr = p.heeftDagAfwijking ? ' <span style="font-size:10px;color:var(--amber);background:var(--amber-pale);padding:1px 6px;border-radius:10px">dag-schema</span>' : '';
       const medStr = p.medisch ? '<span class="badge b-med" style="margin-top:3px;display:inline-block">\u2695 ' + p.medisch + '</span>' : '';
+      const tb = p.tijdsBeperking;
+      const tbStr = tb ? '<div style="font-size:11px;margin-top:3px;display:flex;gap:6px">'
+        + (tb.voor ? '<span style="background:#fdeaea;color:#a33030;padding:1px 7px;border-radius:10px">klaar v\xf3\xf3r ' + tb.voor + '</span>' : '')
+        + (tb.niet ? '<span style="background:#e8f0fa;color:#1a4a7a;padding:1px 7px;border-radius:10px">niet v\xf3\xf3r ' + tb.niet + '</span>' : '')
+        + '</div>' : '';
       return `
       <div class="stop-row">
         <div class="stop-num">${i+1}</div>
@@ -1098,6 +1205,7 @@ function genereerRondes() {
           <div class="stop-name">${p.voornaam} ${p.naam}</div>
           <div class="stop-detail">📍 ${p.adres || '—'} · <strong>${p.duurVandaag} min</strong>${afwijkingStr}</div>
           <div class="stop-detail">${p.zorgenVandaag || '—'}</div>
+          ${tbStr}
           ${medStr}
         </div>
         <div class="stop-time">${p.van}–${p.tot}</div>
