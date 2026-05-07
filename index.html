@@ -1821,6 +1821,170 @@ function dist(a, b) {
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
 }
 
+// ── ROUTE OPTIMALISATIE MET TIJDVENSTERS (VRPTW) ─────────────────
+const RIJSNELHEID_KMU = 45; // km/u gemiddeld in dorpen
+
+function tijdNaarMinuten(tijdStr) {
+  // "07:30" -> 450 (minuten sinds middernacht)
+  if (!tijdStr) return null;
+  const [u, m] = tijdStr.split(':').map(Number);
+  return u * 60 + m;
+}
+
+function minutenNaarTijd(min) {
+  const u = Math.floor(min / 60) % 24;
+  const m = min % 60;
+  return String(u).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+}
+
+function reistijdMinuten(a, b) {
+  // Reistijd in minuten op basis van hemelsbreedse afstand en rijsnelheid
+  // Factor 1.35 voor werkelijke wegafstand vs hemelsbreed
+  const d = dist(a, b);
+  if (d === 999) return 10; // geen coördinaten: scat 10 min
+  return Math.ceil((d * 1.35 / RIJSNELHEID_KMU) * 60);
+}
+
+function optimaliseerRouteMetTijdvensters(pts, startMinuten, rondeType) {
+  // Geen of 1 patiënt: geen optimalisatie nodig
+  if (pts.length <= 1) return pts.map(p => ({...p, geschatAankomst: minutenNaarTijd(startMinuten)}));
+
+  const BASIS = {lat: 51.076, lon: 3.006}; // thuisbasis
+
+  // Bouw tijdvensters op per patiënt
+  const metVensters = pts.map(p => {
+    const isAvond = rondeType === 'avond';
+    const vanStr = isAvond ? (p.vanAvond || p.van || '17:00') : (p.van || '07:00');
+    const totStr = isAvond ? (p.totAvond || p.tot || '20:00') : (p.tot || '09:30');
+    // Tijdsbeperking overschrijft indien strenger
+    const dag = DAYS_SHORT[new Date().getDay()]; // wordt overschreven door ronde datum
+    const tb = p.tijdsBeperking;
+    let vroegst = tijdNaarMinuten(vanStr);
+    let laatst = tijdNaarMinuten(totStr);
+    if (tb) {
+      if (tb.niet) vroegst = Math.max(vroegst, tijdNaarMinuten(tb.niet));
+      if (tb.voor) laatst = Math.min(laatst, tijdNaarMinuten(tb.voor));
+    }
+    return { ...p, vroegst, laatst };
+  });
+
+  // Fase 1: Sortering op urgentie
+  // Urgentiescore = gewogen combinatie van:
+  // - vroeg eindtijdstip (hoge prioriteit = lage score)
+  // - vroeg begintijdstip
+  // Patiënten zonder coördinaten: sorteer enkel op tijd
+  metVensters.sort((a, b) => {
+    const scoreA = a.laatst * 0.7 + a.vroegst * 0.3;
+    const scoreB = b.laatst * 0.7 + b.vroegst * 0.3;
+    return scoreA - scoreB;
+  });
+
+  // Fase 2: Insertion heuristic met tijdvenster-validatie
+  // Begin met de meest urgente patiënt, voeg anderen in op goedkoopste positie
+  // zonder tijdvensters te schenden
+
+  function simuleerRoute(route, startMin) {
+    // Bereken aankomsttijden voor een gegeven volgorde
+    let cur = BASIS;
+    let tijd = startMin;
+    const aankomsten = [];
+    for (const p of route) {
+      tijd += reistijdMinuten(cur, p);
+      // Wacht als we te vroeg zijn
+      if (tijd < p.vroegst) tijd = p.vroegst;
+      aankomsten.push(tijd);
+      tijd += p.duurVandaag;
+      cur = p;
+    }
+    return aankomsten;
+  }
+
+  function isValideRoute(route, startMin) {
+    const aankomsten = simuleerRoute(route, startMin);
+    return aankomsten.every((t, i) => t <= route[i].laatst);
+  }
+
+  // Greedy insertie: bouw route op door steeds de beste positie te vinden
+  let route = [metVensters[0]];
+  for (let i = 1; i < metVensters.length; i++) {
+    const kandidaat = metVensters[i];
+    let bestePositie = -1;
+    let besteKost = Infinity;
+
+    for (let pos = 0; pos <= route.length; pos++) {
+      const testRoute = [...route.slice(0, pos), kandidaat, ...route.slice(pos)];
+      if (isValideRoute(testRoute, startMinuten)) {
+        // Bereken de extra reistijd die deze invoeging kost
+        const voor = pos > 0 ? route[pos-1] : BASIS;
+        const na = pos < route.length ? route[pos] : null;
+        const extraKost = reistijdMinuten(voor, kandidaat) +
+          (na ? reistijdMinuten(kandidaat, na) - reistijdMinuten(voor, na) : 0);
+        if (extraKost < besteKost) {
+          besteKost = extraKost;
+          bestePositie = pos;
+        }
+      }
+    }
+
+    if (bestePositie === -1) {
+      // Tijdvenster kan niet gerespecteerd worden op geen enkele positie
+      // Voeg toe op de minst slechte positie (einde van route)
+      route.push(kandidaat);
+    } else {
+      route.splice(bestePositie, 0, kandidaat);
+    }
+  }
+
+  // Fase 3: 2-opt verbetering (wissel paren om als dat de route verkort)
+  // zonder tijdvensters te schenden
+  let verbeterd = true;
+  let iteraties = 0;
+  while (verbeterd && iteraties < 20) {
+    verbeterd = false;
+    iteraties++;
+    for (let i = 0; i < route.length - 1; i++) {
+      for (let j = i + 1; j < route.length; j++) {
+        const nieuweRoute = [
+          ...route.slice(0, i),
+          ...route.slice(i, j+1).reverse(),
+          ...route.slice(j+1)
+        ];
+        if (isValideRoute(nieuweRoute, startMinuten)) {
+          // Vergelijk totale reistijd
+          const oudeTijd = berekenTotaleReistijd(route);
+          const nieuweTijd = berekenTotaleReistijd(nieuweRoute);
+          if (nieuweTijd < oudeTijd - 0.5) {
+            route = nieuweRoute;
+            verbeterd = true;
+          }
+        }
+      }
+    }
+  }
+
+  // Voeg geschatte aankomsttijden toe
+  const aankomsten = simuleerRoute(route, startMinuten);
+  return route.map((p, i) => ({
+    ...p,
+    geschatAankomst: minutenNaarTijd(aankomsten[i]),
+    aankomstMinuten: aankomsten[i],
+    teVroeg: aankomsten[i] < p.vroegst,
+    teLaat: aankomsten[i] > p.laatst
+  }));
+}
+
+function berekenTotaleReistijd(route) {
+  const BASIS = {lat: 51.076, lon: 3.006};
+  let cur = BASIS;
+  let totaal = 0;
+  for (const p of route) {
+    totaal += reistijdMinuten(cur, p);
+    cur = p;
+  }
+  return totaal;
+}
+
+// Oude functie behouden als fallback zonder coördinaten
 function optimaliseerRoute(pts, start) {
   if (pts.length <= 1) return pts;
   let remaining = [...pts], route = [], cur = start || {lat:51.076, lon:3.006};
@@ -2008,7 +2172,7 @@ function genereerRondes() {
     && !isInNietBezoekPeriode(p, d)
   );
 
-  // Verrijk elke patiënt met de duur/zorgen voor deze specifieke dag
+  // Verrijk elke patiënt met dag-specifieke info
   const verrijkt = actief.map(p => ({
     ...p,
     duurVandaag: duurOpDatum(p, d),
@@ -2017,60 +2181,110 @@ function genereerRondes() {
     tijdsBeperking: p.tijdsSchema && p.tijdsSchema[DAYS_SHORT[d.getDay()]] && p.tijdsSchema[DAYS_SHORT[d.getDay()]].actief ? p.tijdsSchema[DAYS_SHORT[d.getDay()]] : null
   }));
 
-  const ochtend = optimaliseerRoute(verrijkt.filter(p => p.ronde === 'ochtend' || p.ronde === 'beide'));
-  const avond = optimaliseerRoute(verrijkt.filter(p => p.ronde === 'avond' || p.ronde === 'beide'));
+  // Splits ochtend/avond
+  const ochtendPts = verrijkt.filter(p => p.ronde === 'ochtend' || p.ronde === 'beide');
+  const avondPts = verrijkt.filter(p => p.ronde === 'avond' || p.ronde === 'beide');
 
-  const rondeGroepen = Array.from({length: nRondes}, () => []);
-  ochtend.forEach((p, i) => rondeGroepen[i % nRondes].push(p));
+  // Verdeel ochtendpatiënten over rondes op basis van tijdvensters
+  // Patiënten met vroeg eindtijdstip komen in vroegere rondes
+  const gesorteerdeOchtend = [...ochtendPts].sort((a, b) => {
+    const totA = tijdNaarMinuten(a.tot || '09:30');
+    const totB = tijdNaarMinuten(b.tot || '09:30');
+    return totA - totB;
+  });
 
   const startUren = ['07:00','07:30','08:00','08:30'];
+  const rondeGroepen = Array.from({length: nRondes}, () => []);
+  gesorteerdeOchtend.forEach((p, i) => rondeGroepen[i % nRondes].push(p));
+
+  // Optimaliseer elke ronde met tijdvensters
   const rondes = rondeGroepen
-    .map((pts, i) => ({label: `Ronde ${i+1} — ochtend`, klasse: 'ochtend', patienten: pts, start: startUren[i] || '07:00'}))
+    .map((pts, i) => {
+      const startStr = startUren[i] || '07:00';
+      const startMin = tijdNaarMinuten(startStr);
+      const geoptimaliseerd = pts.length > 0
+        ? optimaliseerRouteMetTijdvensters(pts, startMin, 'ochtend')
+        : [];
+      return { label: 'Ronde ' + (i+1) + ' \u2014 ochtend', klasse: 'ochtend', patienten: geoptimaliseerd, start: startStr };
+    })
     .filter(r => r.patienten.length > 0);
 
-  if (avond.length) {
-    rondes.push({label: 'Avond ronde', klasse: 'avond', patienten: avond, start: '17:00'});
+  if (avondPts.length) {
+    const avondGeopt = optimaliseerRouteMetTijdvensters(avondPts, tijdNaarMinuten('17:00'), 'avond');
+    rondes.push({ label: 'Avond ronde', klasse: 'avond', patienten: avondGeopt, start: '17:00' });
   }
 
   const el = document.getElementById('rondes-resultaat');
   if (!rondes.length) {
-    el.innerHTML = `<div class="empty"><div class="empty-icon">🗺</div><p>Geen actieve patiënten voor ${dagNaam}.</p></div>`;
+    el.innerHTML = '<div class="empty"><div class="empty-icon">\uD83D\uDDFA</div><p>Geen actieve pati\u00ebnten voor ' + dagNaam + '.</p></div>';
     return;
   }
 
   el.innerHTML = rondes.map(r => {
-    const totMin = r.patienten.reduce((s, p) => s + p.duurVandaag, 0);
-    const uur = Math.floor(totMin/60), min = totMin%60;
-    const duurStr = uur > 0 ? `${uur}u${min > 0 ? min+'m' : ''}` : `${min} min`;
+    // Bereken totale tijd inclusief reistijd
+    const zorgMin = r.patienten.reduce((s, p) => s + p.duurVandaag, 0);
+    const reisMin = Math.round(berekenTotaleReistijd(r.patienten));
+    const totaalMin = zorgMin + reisMin;
+    const uur = Math.floor(totaalMin/60), min = totaalMin%60;
+    const duurStr = uur > 0 ? uur + 'u' + (min > 0 ? min + 'm' : '') : min + ' min';
+
+    // Bereken eindtijd ronde
+    const laatste = r.patienten[r.patienten.length - 1];
+    const eindMin = laatste.aankomstMinuten ? laatste.aankomstMinuten + laatste.duurVandaag : null;
+    const eindStr = eindMin ? ' · klaar ~' + minutenNaarTijd(eindMin) : '';
+
+    // Waarschuwing als tijdvensters niet volledig gerespecteerd
+    const heeftWarning = r.patienten.some(p => p.teLaat);
+
     const stops = r.patienten.map((p, i) => {
-      const afwijkingStr = p.heeftDagAfwijking ? ' <span style="font-size:10px;color:var(--amber);background:var(--amber-pale);padding:1px 6px;border-radius:10px">dag-schema</span>' : '';
-      const medStr = p.medisch ? '<span class="badge b-med" style="margin-top:3px;display:inline-block">\u2695 ' + p.medisch + '</span>' : '';
+      const afwijkingStr = p.heeftDagAfwijking
+        ? ' <span style="font-size:10px;color:var(--amber);background:var(--amber-pale);padding:1px 6px;border-radius:10px">dag-schema</span>' : '';
+      const medStr = p.medisch
+        ? '<span class="badge b-med" style="margin-top:3px;display:inline-block">\u2695 ' + p.medisch + '</span>' : '';
       const tb = p.tijdsBeperking;
-      const tbStr = tb ? '<div style="font-size:11px;margin-top:3px;display:flex;gap:6px">'
-        + (tb.voor ? '<span style="background:#fdeaea;color:#a33030;padding:1px 7px;border-radius:10px">klaar v\xf3\xf3r ' + tb.voor + '</span>' : '')
-        + (tb.niet ? '<span style="background:#e8f0fa;color:#1a4a7a;padding:1px 7px;border-radius:10px">niet v\xf3\xf3r ' + tb.niet + '</span>' : '')
-        + '</div>' : '';
+      const tbStr = tb
+        ? '<div style="font-size:11px;margin-top:3px;display:flex;gap:6px;flex-wrap:wrap">'
+          + (tb.voor ? '<span style="background:#fdeaea;color:#a33030;padding:1px 7px;border-radius:10px">klaar v\xf3\xf3r ' + tb.voor + '</span>' : '')
+          + (tb.niet ? '<span style="background:#e8f0fa;color:#1a4a7a;padding:1px 7px;border-radius:10px">niet v\xf3\xf3r ' + tb.niet + '</span>' : '')
+          + '</div>' : '';
+
+      // Aankomsttijd weergave
+      const aankomstKleur = p.teLaat ? 'color:#a33030;font-weight:500' : p.teVroeg ? 'color:#c47d1a' : 'color:var(--green)';
+      const aankomstWarning = p.teLaat ? ' ⚠' : '';
+      const aankomstStr = p.geschatAankomst
+        ? '<div style="font-size:11px;margin-top:2px;' + aankomstKleur + '">\u23F0 geschat: ' + p.geschatAankomst + aankomstWarning + '</div>' : '';
+
+      // Tijdvenster patiënt
+      const vensterStr = r.klasse === 'avond'
+        ? (p.vanAvond || p.van) + '\u2013' + (p.totAvond || p.tot)
+        : p.van + '\u2013' + p.tot;
+
       return `
       <div class="stop-row">
         <div class="stop-num">${i+1}</div>
         <div style="flex:1">
           <div class="stop-name">${p.voornaam} ${p.naam}</div>
-          <div class="stop-detail">📍 ${p.adres || '—'} · <strong>${p.duurVandaag} min</strong>${afwijkingStr}</div>
-          <div class="stop-detail">${p.zorgenVandaag || '—'}</div>
-          ${tbStr}
-          ${medStr}
+          <div class="stop-detail">\uD83D\uDCCD ${p.adres || '\u2014'} \xb7 <strong>${p.duurVandaag} min</strong>${afwijkingStr}</div>
+          <div class="stop-detail">${p.zorgenVandaag || '\u2014'}</div>
+          ${aankomstStr}${tbStr}${medStr}
         </div>
-        <div class="stop-time">${r.klasse === 'avond' ? (p.vanAvond || p.van) + '–' + (p.totAvond || p.tot) : p.van + '–' + p.tot}</div>
+        <div style="text-align:right;flex-shrink:0">
+          <div class="stop-time">${vensterStr}</div>
+        </div>
       </div>`;
     }).join('');
+
+    const warningBanner = heeftWarning
+      ? '<div style="background:#fdeaea;color:#a33030;font-size:12px;padding:8px 14px;border-bottom:1px solid #f5c6c6">\u26A0\uFE0F Let op: voor \xe9\xe9n of meer pati\u00ebnten kon het tijdvenster niet volledig gerespecteerd worden. Controleer de markering (\u26A0) en pas eventueel de rondetijden aan.</div>' : '';
 
     return `
     <div class="ronde-block">
       <div class="ronde-head">
-        <span style="font-size:18px">${r.klasse === 'avond' ? '🌙' : '☀️'}</span>
+        <span style="font-size:18px">${r.klasse === 'avond' ? '\uD83C\uDF19' : '\u2600\uFE0F'}</span>
         <div class="ronde-head-title">${r.label}</div>
-        <div class="ronde-meta">${r.patienten.length} pat. · ~${duurStr} · start ${r.start}</div>
+        <div class="ronde-meta">${r.patienten.length} pat. \xb7 ~${duurStr}${eindStr} \xb7 start ${r.start}</div>
       </div>
+      ${warningBanner}
       ${stops}
     </div>`;
   }).join('');
