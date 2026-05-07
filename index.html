@@ -443,6 +443,10 @@ textarea { resize: vertical; min-height: 70px; }
   <div class="tab" id="tab-nieuw" onclick="showTab('nieuw')">
     <span class="tab-icon">➕</span><span>Nieuw</span>
   </div>
+  <div class="tab" id="tab-bulk" onclick="showTab('bulk')" style="position:relative">
+    <span class="tab-icon">📦</span><span>Bulk</span>
+    <span id="bulk-badge" style="display:none;position:absolute;top:6px;right:6px;background:#a33030;color:white;font-size:9px;font-weight:500;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center"></span>
+  </div>
   <div class="tab" id="tab-instellingen" onclick="showTab('instellingen')">
     <span class="tab-icon">⚙️</span><span>Beheer</span>
   </div>
@@ -689,6 +693,45 @@ textarea { resize: vertical; min-height: 70px; }
   </div>
   <button class="btn btn-primary btn-full" onclick="slaPatientOp()">💾 Patiënt opslaan</button>
   <div class="success-msg" id="save-ok"></div>
+</div>
+
+<!-- ══════════════════ BULK IMPORT ══════════════════ -->
+<div class="pane" id="pane-bulk">
+
+  <!-- Upload sectie -->
+  <div class="card" style="border:1.5px dashed var(--green-mid);background:var(--green-pale)">
+    <div class="section-title" style="color:var(--green)">📦 Bulk import via screenshots</div>
+    <p style="font-size:13px;color:var(--text-muted);margin:6px 0 12px">
+      Upload meerdere screenshots van je andere app. Claude leest elk scherm uit en plaatst de patiënten in de wachtrij hieronder. Jij controleert, past aan en bevestigt per patiënt.
+    </p>
+    <label class="btn btn-primary btn-full" style="cursor:pointer;justify-content:center" id="bulk-upload-label">
+      📷 Kies screenshots (meerdere tegelijk)
+      <input type="file" accept="image/*" multiple id="bulk-input" style="display:none" onchange="startBulkImport(event)">
+    </label>
+    <div id="bulk-voortgang" style="display:none;margin-top:12px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);margin-bottom:4px">
+        <span id="bulk-voortgang-tekst">Verwerken…</span>
+        <span id="bulk-voortgang-num"></span>
+      </div>
+      <div style="background:var(--cream-dark);border-radius:20px;height:6px;overflow:hidden">
+        <div id="bulk-voortgang-balk" style="background:var(--green);height:100%;width:0%;transition:width 0.3s;border-radius:20px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Wachtrij teller -->
+  <div id="bulk-wachtrij-header" style="display:none;display:flex;align-items:center;gap:8px">
+    <div style="font-size:13px;font-weight:500;flex:1">Wachtrij — <span id="bulk-wachtrij-aantal">0</span> te beoordelen</div>
+    <button class="btn btn-sm btn-primary" onclick="bevestigAlleWachtrij()">✓ Alles goedkeuren</button>
+    <button class="btn btn-sm btn-danger" onclick="verwijderAlleWachtrij()">✕ Alles verwijderen</button>
+  </div>
+
+  <div id="bulk-wachtrij-lijst" style="display:flex;flex-direction:column;gap:10px"></div>
+
+  <div id="bulk-leeg" class="empty" style="display:none">
+    <div class="empty-icon">📭</div>
+    <p>Wachtrij is leeg — upload screenshots om te beginnen</p>
+  </div>
 </div>
 
 <!-- ══════════════════ BEHEER / INSTELLINGEN ══════════════════ -->
@@ -1748,6 +1791,7 @@ window.addEventListener('load', async () => {
   initHeader();
   checkPauzeHervat();
   renderLijst();
+  laadBulkWachtrij();
   document.getElementById('ronde-datum').valueAsDate = new Date();
   checkBirthdays();
   registerSW();
@@ -1805,6 +1849,7 @@ function showTab(t) {
   document.getElementById('pane-' + t).classList.add('active');
   document.getElementById('tab-' + t).classList.add('active');
   if (t === 'lijst') renderLijst();
+  if (t === 'bulk') renderBulkWachtrij();
   if (t === 'instellingen') {
     const hasKey = !!getApiKey();
     const s = document.getElementById('api-key-status');
@@ -2357,7 +2402,324 @@ function genereerRondes() {
   }).join('');
 }
 
-// ── EXPORT / IMPORT ───────────────────────────────────────────────
+// ── BULK IMPORT ───────────────────────────────────────────────────
+const BULK_KEY = 'vp_bulk_wachtrij';
+let bulkWachtrij = [];
+
+function laadBulkWachtrij() {
+  try {
+    bulkWachtrij = JSON.parse(localStorage.getItem(BULK_KEY)) || [];
+  } catch(e) { bulkWachtrij = []; }
+  renderBulkWachtrij();
+}
+
+function slaanBulkWachtrijOp() {
+  localStorage.setItem(BULK_KEY, JSON.stringify(bulkWachtrij));
+  // Badge updaten
+  const badge = document.getElementById('bulk-badge');
+  if (bulkWachtrij.length > 0) {
+    badge.style.display = 'block';
+    badge.textContent = bulkWachtrij.length;
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+async function startBulkImport(evt) {
+  const files = Array.from(evt.target.files);
+  evt.target.value = '';
+  if (!files.length) return;
+
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    alert('Geen Anthropic API-sleutel ingesteld. Ga naar Beheer en voeg je sleutel toe.');
+    return;
+  }
+
+  const voortgang = document.getElementById('bulk-voortgang');
+  const tekst = document.getElementById('bulk-voortgang-tekst');
+  const num = document.getElementById('bulk-voortgang-num');
+  const balk = document.getElementById('bulk-voortgang-balk');
+  const label = document.getElementById('bulk-upload-label');
+
+  voortgang.style.display = 'block';
+  label.style.opacity = '0.5';
+  label.style.pointerEvents = 'none';
+
+  let verwerkt = 0;
+  let gelukt = 0;
+
+  for (const file of files) {
+    tekst.textContent = 'Verwerken: ' + file.name.substring(0, 30) + '…';
+    num.textContent = (verwerkt + 1) + ' / ' + files.length;
+    balk.style.width = (verwerkt / files.length * 100) + '%';
+
+    try {
+      const base64 = await new Promise((res, rej) => {
+        const reader = new FileReader();
+        reader.onload = e => res(e.target.result.split(',')[1]);
+        reader.onerror = () => rej(new Error('Leesfout'));
+        reader.readAsDataURL(file);
+      });
+
+      const mediaType = file.type || 'image/jpeg';
+      const prompt = `Je bent een assistent die patiëntgegevens uittrekt uit een screenshot van een verpleegkundige planning-app.
+
+Analyseer de afbeelding en geef de gegevens terug als JSON. Gebruik null voor ontbrekende velden. Geef ALLEEN de JSON terug, geen uitleg.
+
+{
+  "voornaam": "...",
+  "naam": "...",
+  "adres": "...",
+  "geb": "YYYY-MM-DD of null",
+  "tel": "...",
+  "geslacht": "v of m of x of null"
+}
+
+Regels:
+- adres: volledig adres inclusief gemeente indien zichtbaar
+- geb: geboortedatum omzetten naar YYYY-MM-DD
+- geslacht: afleiden uit naam/aanspreking indien mogelijk, anders null
+- Als de afbeelding geen patiëntgegevens bevat, geef dan {"leeg": true}`;
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-opus-4-5',
+          max_tokens: 500,
+          messages: [{ role: 'user', content: [
+            { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+            { type: 'text', text: prompt }
+          ]}]
+        })
+      });
+
+      if (!response.ok) throw new Error('API fout ' + response.status);
+      const data = await response.json();
+      const tekst2 = data.content.map(b => b.text || '').join('');
+      const jsonMatch = tekst2.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('Geen JSON in antwoord');
+
+      const gevonden = JSON.parse(jsonMatch[0]);
+      if (gevonden.leeg) {
+        verwerkt++;
+        continue; // sla lege schermen over
+      }
+
+      // Voeg toe aan wachtrij met unieke bulk-id
+      bulkWachtrij.push({
+        bulkId: Date.now() + '_' + Math.random().toString(36).slice(2),
+        bestandsnaam: file.name,
+        voornaam: gevonden.voornaam || '',
+        naam: gevonden.naam || '',
+        adres: gevonden.adres || '',
+        geb: gevonden.geb || '',
+        tel: gevonden.tel || '',
+        geslacht: gevonden.geslacht || '',
+        // Overige velden leeg laten voor aanvulling
+        status: 'actief',
+        van: '07:00', tot: '09:30',
+        vanAvond: '17:00', totAvond: '20:00',
+        duur: 30, ronde: 'ochtend',
+        zorgen: '', afwezig: '', medisch: '',
+        lat: null, lon: null,
+        dagSchema: {}, tijdsSchema: {}, frequentie: { type: 'dagelijks' }, nietBezoek: []
+      });
+      gelukt++;
+    } catch(e) {
+      console.warn('Bulk import fout voor', file.name, e.message);
+    }
+
+    verwerkt++;
+    // Kleine pauze om API niet te overbelasten
+    await new Promise(r => setTimeout(r, 300));
+  }
+
+  balk.style.width = '100%';
+  tekst.textContent = gelukt + ' van ' + files.length + ' patiënten herkend';
+  num.textContent = '';
+  label.style.opacity = '1';
+  label.style.pointerEvents = 'auto';
+
+  slaanBulkWachtrijOp();
+  renderBulkWachtrij();
+
+  setTimeout(() => { voortgang.style.display = 'none'; }, 4000);
+}
+
+function renderBulkWachtrij() {
+  const el = document.getElementById('bulk-wachtrij-lijst');
+  const header = document.getElementById('bulk-wachtrij-header');
+  const leeg = document.getElementById('bulk-leeg');
+  const aantalEl = document.getElementById('bulk-wachtrij-aantal');
+
+  if (!bulkWachtrij.length) {
+    el.innerHTML = '';
+    header.style.display = 'none';
+    leeg.style.display = 'block';
+    return;
+  }
+
+  leeg.style.display = 'none';
+  header.style.display = 'flex';
+  aantalEl.textContent = bulkWachtrij.length;
+
+  el.innerHTML = bulkWachtrij.map((p, idx) => {
+    const dubbels = checkDuplicaatBulk(p);
+    const dupWarning = dubbels.length
+      ? '<div style="background:#faeeda;color:#854F0B;font-size:11px;padding:4px 8px;border-radius:var(--radius-sm);margin-bottom:6px">\u26a0\uFE0F Mogelijke duplicaat: ' + dubbels.map(d => d.voornaam + ' ' + d.naam).join(', ') + '</div>'
+      : '';
+
+    return `<div class="card" style="border-color:var(--green-mid)" id="bulk-item-${p.bulkId}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <div class="avatar" style="flex-shrink:0">${((p.voornaam||'?')[0] + (p.naam||'?')[0]).toUpperCase()}</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:500">${p.voornaam || '—'} ${p.naam || '—'}</div>
+          <div style="font-size:11px;color:var(--text-muted)">${p.bestandsnaam}</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm btn-primary" onclick="bevestigBulkPatient('${p.bulkId}')">✓ Toevoegen</button>
+          <button class="btn btn-sm" onclick="bewerkBulkPatient('${p.bulkId}')">✏️</button>
+          <button class="btn btn-sm btn-danger" onclick="verwijderBulkPatient('${p.bulkId}')">✕</button>
+        </div>
+      </div>
+      ${dupWarning}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">
+        <div><span style="color:var(--text-muted)">Adres: </span>${p.adres || '—'}</div>
+        <div><span style="color:var(--text-muted)">Geb: </span>${p.geb || '—'}</div>
+        <div><span style="color:var(--text-muted)">Tel: </span>${p.tel || '—'}</div>
+        <div><span style="color:var(--text-muted)">Geslacht: </span>${geslachtLabel(p.geslacht) || '—'}</div>
+      </div>
+      <div id="bulk-edit-${p.bulkId}" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div class="field"><label>Voornaam</label><input type="text" id="be-voornaam-${p.bulkId}" value="${p.voornaam||''}"></div>
+          <div class="field"><label>Naam</label><input type="text" id="be-naam-${p.bulkId}" value="${p.naam||''}"></div>
+          <div class="field"><label>Adres</label><input type="text" id="be-adres-${p.bulkId}" value="${p.adres||''}"></div>
+          <div class="field"><label>Geboortedatum</label><input type="date" id="be-geb-${p.bulkId}" value="${p.geb||''}"></div>
+          <div class="field"><label>Telefoon</label><input type="tel" id="be-tel-${p.bulkId}" value="${p.tel||''}"></div>
+          <div class="field"><label>Geslacht</label>
+            <select id="be-geslacht-${p.bulkId}">
+              <option value="" ${!p.geslacht?'selected':''}>—</option>
+              <option value="v" ${p.geslacht==='v'?'selected':''}>♀ Vrouw</option>
+              <option value="m" ${p.geslacht==='m'?'selected':''}>♂ Man</option>
+              <option value="x" ${p.geslacht==='x'?'selected':''}>⚧ X</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div class="field"><label>Ronde</label>
+            <select id="be-ronde-${p.bulkId}">
+              <option value="ochtend" ${p.ronde==='ochtend'?'selected':''}>Ochtend</option>
+              <option value="avond" ${p.ronde==='avond'?'selected':''}>Avond</option>
+              <option value="beide" ${p.ronde==='beide'?'selected':''}>Beide</option>
+            </select>
+          </div>
+          <div class="field"><label>Gem. duur (min)</label><input type="number" id="be-duur-${p.bulkId}" value="${p.duur||30}" min="5"></div>
+        </div>
+        <div class="field" style="margin-bottom:8px"><label>Zorgen</label><input type="text" id="be-zorgen-${p.bulkId}" value="${p.zorgen||''}" placeholder="bv. wondverzorging, bloeddruk…"></div>
+        <div class="field" style="margin-bottom:8px"><label>Medisch profiel</label><input type="text" id="be-medisch-${p.bulkId}" value="${p.medisch||''}" placeholder="bv. diabeet, hartlijder…"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-sm" onclick="sluitBulkEdit('${p.bulkId}')">Annuleren</button>
+          <button class="btn btn-sm btn-primary" onclick="slaanBulkEditOp('${p.bulkId}')">Opslaan</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function checkDuplicaatBulk(p) {
+  return patienten.filter(bestaand => {
+    const zelfdeNaamGeb = bestaand.voornaam?.toLowerCase() === p.voornaam?.toLowerCase()
+      && bestaand.naam?.toLowerCase() === p.naam?.toLowerCase()
+      && bestaand.geb && p.geb && bestaand.geb === p.geb;
+    const zelfdeAdres = bestaand.adres && p.adres
+      && bestaand.adres.toLowerCase().trim() === p.adres.toLowerCase().trim();
+    return zelfdeNaamGeb || zelfdeAdres;
+  });
+}
+
+function bewerkBulkPatient(bulkId) {
+  const editEl = document.getElementById('bulk-edit-' + bulkId);
+  editEl.style.display = editEl.style.display === 'none' ? 'block' : 'none';
+}
+
+function sluitBulkEdit(bulkId) {
+  document.getElementById('bulk-edit-' + bulkId).style.display = 'none';
+}
+
+function slaanBulkEditOp(bulkId) {
+  const idx = bulkWachtrij.findIndex(p => p.bulkId === bulkId);
+  if (idx === -1) return;
+  bulkWachtrij[idx] = {
+    ...bulkWachtrij[idx],
+    voornaam: document.getElementById('be-voornaam-' + bulkId).value.trim(),
+    naam: document.getElementById('be-naam-' + bulkId).value.trim(),
+    adres: document.getElementById('be-adres-' + bulkId).value.trim(),
+    geb: document.getElementById('be-geb-' + bulkId).value,
+    tel: document.getElementById('be-tel-' + bulkId).value.trim(),
+    geslacht: document.getElementById('be-geslacht-' + bulkId).value,
+    ronde: document.getElementById('be-ronde-' + bulkId).value,
+    duur: parseInt(document.getElementById('be-duur-' + bulkId).value) || 30,
+    zorgen: document.getElementById('be-zorgen-' + bulkId).value.trim(),
+    medisch: document.getElementById('be-medisch-' + bulkId).value.trim()
+  };
+  slaanBulkWachtrijOp();
+  renderBulkWachtrij();
+}
+
+function bevestigBulkPatient(bulkId) {
+  const idx = bulkWachtrij.findIndex(p => p.bulkId === bulkId);
+  if (idx === -1) return;
+  const p = {...bulkWachtrij[idx]};
+  delete p.bulkId;
+  delete p.bestandsnaam;
+  p.id = nextId();
+  patienten.push(p);
+  saveData();
+  bulkWachtrij.splice(idx, 1);
+  slaanBulkWachtrijOp();
+  renderBulkWachtrij();
+  renderLijst();
+  // Kort visuele bevestiging
+  const item = document.getElementById('bulk-item-' + bulkId);
+  if (item) item.style.opacity = '0';
+}
+
+function verwijderBulkPatient(bulkId) {
+  bulkWachtrij = bulkWachtrij.filter(p => p.bulkId !== bulkId);
+  slaanBulkWachtrijOp();
+  renderBulkWachtrij();
+}
+
+function bevestigAlleWachtrij() {
+  if (!confirm(bulkWachtrij.length + ' patiënten toevoegen aan de lijst?')) return;
+  bulkWachtrij.forEach(p => {
+    const nieuw = {...p};
+    delete nieuw.bulkId;
+    delete nieuw.bestandsnaam;
+    nieuw.id = nextId();
+    patienten.push(nieuw);
+  });
+  saveData();
+  bulkWachtrij = [];
+  slaanBulkWachtrijOp();
+  renderBulkWachtrij();
+  renderLijst();
+  showTab('lijst');
+}
+
+function verwijderAlleWachtrij() {
+  if (!confirm('Volledige wachtrij verwijderen?')) return;
+  bulkWachtrij = [];
+  slaanBulkWachtrijOp();
+  renderBulkWachtrij();
+}
 function exportData() {
   const json = JSON.stringify(patienten, null, 2);
   const blob = new Blob([json], {type: 'application/json'});
