@@ -450,20 +450,38 @@ textarea { resize: vertical; min-height: 70px; }
 
 <!-- ══════════════════ PATIËNTEN LIJST ══════════════════ -->
 <div class="pane active" id="pane-lijst">
-  <div class="stats-row">
+  <div class="stats-row" style="grid-template-columns:repeat(5,1fr)">
     <div class="stat-card"><div class="stat-val" id="s-totaal">0</div><div class="stat-lbl">Totaal</div></div>
     <div class="stat-card"><div class="stat-val" id="s-actief">0</div><div class="stat-lbl">Actief</div></div>
     <div class="stat-card"><div class="stat-val" id="s-vandaag">0</div><div class="stat-lbl">Vandaag</div></div>
+    <div class="stat-card"><div class="stat-val" id="s-vrouw">0</div><div class="stat-lbl">♀ Vrouwen</div></div>
+    <div class="stat-card"><div class="stat-val" id="s-man">0</div><div class="stat-lbl">♂ Mannen</div></div>
   </div>
   <div class="search-row">
     <div class="search-wrap">
       <span class="search-icon">🔍</span>
       <input type="text" id="zoek" placeholder="Zoek op naam of adres…" oninput="renderLijst()">
     </div>
-    <select id="filter-status" style="max-width:130px" onchange="renderLijst()">
-      <option value="all">Allen</option>
+  </div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+    <select id="filter-status" style="flex:1;min-width:100px;font-size:13px" onchange="renderLijst()">
+      <option value="all">Alle statussen</option>
       <option value="actief">Actief</option>
       <option value="inactief">Inactief</option>
+    </select>
+    <select id="filter-geslacht" style="flex:1;min-width:100px;font-size:13px" onchange="renderLijst()">
+      <option value="all">Alle geslachten</option>
+      <option value="v">♀ Vrouwen</option>
+      <option value="m">♂ Mannen</option>
+      <option value="x">⚧ X / overig</option>
+      <option value="">Niet opgegeven</option>
+    </select>
+    <select id="sorteer" style="flex:1;min-width:120px;font-size:13px" onchange="renderLijst()">
+      <option value="naam-az">Naam A→Z</option>
+      <option value="naam-za">Naam Z→A</option>
+      <option value="leeftijd-jong">Leeftijd: jong→oud</option>
+      <option value="leeftijd-oud">Leeftijd: oud→jong</option>
+      <option value="geslacht">Geslacht</option>
     </select>
   </div>
   <div id="patient-lijst"></div>
@@ -2000,26 +2018,62 @@ function optimaliseerRoute(pts, start) {
 function renderLijst() {
   const q = (document.getElementById('zoek').value || '').toLowerCase();
   const fs = document.getElementById('filter-status').value;
+  const fg = document.getElementById('filter-geslacht').value;
+  const sorteer = document.getElementById('sorteer').value;
   const vandaag = DAYS_NL[new Date().getDay()];
 
-  const gefilterd = patienten.filter(p => {
-    const nm = (p.voornaam + ' ' + p.naam).toLowerCase();
-    const adr = (p.adres || '').toLowerCase();
-    return (nm.includes(q) || adr.includes(q)) && (fs === 'all' || p.status === fs);
-  });
-
+  // Stats berekenen op ALLE patiënten (ongeacht filter)
   const actief = patienten.filter(p => p.status === 'actief');
   const vandaagDatum = new Date();
-  const vandaagActief = actief.filter(p => !afwezigOp(p, vandaag) && isAanDeBeurt(p, vandaagDatum));
+  const vandaagActief = actief.filter(p => !afwezigOp(p, vandaag) && isAanDeBeurt(p, vandaagDatum) && !isInNietBezoekPeriode(p, vandaagDatum));
   document.getElementById('s-totaal').textContent = patienten.length;
   document.getElementById('s-actief').textContent = actief.length;
   document.getElementById('s-vandaag').textContent = vandaagActief.length;
+  document.getElementById('s-vrouw').textContent = patienten.filter(p => p.geslacht === 'v').length;
+  document.getElementById('s-man').textContent = patienten.filter(p => p.geslacht === 'm').length;
+
+  // Filter
+  let gefilterd = patienten.filter(p => {
+    const nm = (p.voornaam + ' ' + p.naam).toLowerCase();
+    const adr = (p.adres || '').toLowerCase();
+    const zoekOk = nm.includes(q) || adr.includes(q);
+    const statusOk = fs === 'all' || p.status === fs;
+    const geslachtOk = fg === 'all' || p.geslacht === fg;
+    return zoekOk && statusOk && geslachtOk;
+  });
+
+  // Sortering
+  const geslachtVolgorde = { 'v': 0, 'm': 1, 'x': 2, '': 3, undefined: 3 };
+  gefilterd.sort((a, b) => {
+    switch (sorteer) {
+      case 'naam-az': return (a.naam + a.voornaam).localeCompare(b.naam + b.voornaam, 'nl');
+      case 'naam-za': return (b.naam + b.voornaam).localeCompare(a.naam + a.voornaam, 'nl');
+      case 'leeftijd-jong': {
+        const la = leeftijd(a.geb) || 0, lb = leeftijd(b.geb) || 0;
+        return la - lb;
+      }
+      case 'leeftijd-oud': {
+        const la = leeftijd(a.geb) || 0, lb = leeftijd(b.geb) || 0;
+        return lb - la;
+      }
+      case 'geslacht': {
+        const ga = geslachtVolgorde[a.geslacht] ?? 3;
+        const gb = geslachtVolgorde[b.geslacht] ?? 3;
+        return ga !== gb ? ga - gb : (a.naam + a.voornaam).localeCompare(b.naam + b.voornaam, 'nl');
+      }
+      default: return 0;
+    }
+  });
 
   const el = document.getElementById('patient-lijst');
   if (!gefilterd.length) {
-    el.innerHTML = `<div class="empty"><div class="empty-icon">👥</div><p>Geen patiënten gevonden</p></div>`;
+    el.innerHTML = '<div class="empty"><div class="empty-icon">\uD83D\uDC65</div><p>Geen pati\u00ebnten gevonden</p></div>';
     return;
   }
+
+  // Groepeer bij sortering op geslacht
+  let vorigeGroep = null;
+  const geslachtNaam = { 'v': '\u2640 Vrouwen', 'm': '\u2642 Mannen', 'x': '\u26a7 X / overig', '': 'Geslacht niet opgegeven' };
 
   el.innerHTML = gefilterd.map(p => {
     const age = leeftijd(p.geb);
@@ -2028,13 +2082,27 @@ function renderLijst() {
     const gslStr = gsl ? ' <span style="font-size:11px;color:var(--text-muted)">' + gsl + '</span>' : '';
     const medStr = p.medisch ? '<div class="detail-field"><label>Medisch profiel</label><div class="val"><span class="badge b-med">\u2695 ' + p.medisch + '</span></div></div>' : '';
     const afwStr = p.afwezig ? '<div class="detail-field"><label>Afwezigheden</label><div class="val">' + p.afwezig + '</div></div>' : '';
-    return `
+    const pauzeStr = p.pauzeReden ? '<div class="detail-field"><label>Pauzeer reden</label><div class="val" style="color:var(--amber)">' + p.pauzeReden + (p.pauzeEinddatum ? ' (tot ' + p.pauzeEinddatum + ')' : '') + '</div></div>' : '';
+
+    // Groepsheader bij geslacht-sortering
+    let groepHeader = '';
+    if (sorteer === 'geslacht') {
+      const groepSleutel = p.geslacht || '';
+      if (groepSleutel !== vorigeGroep) {
+        vorigeGroep = groepSleutel;
+        const aantalInGroep = gefilterd.filter(x => (x.geslacht || '') === groepSleutel).length;
+        groepHeader = '<div style="font-size:11px;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;padding:6px 4px 4px;margin-top:4px">'
+          + (geslachtNaam[groepSleutel] || 'Onbekend') + ' <span style="font-weight:400">(' + aantalInGroep + ')</span></div>';
+      }
+    }
+
+    return groepHeader + `
     <div class="patient-item" style="margin-bottom:8px">
       <div class="patient-header" onclick="toggleDetail(${p.id})">
         <div class="avatar">${initials(p)}</div>
         <div style="flex:1">
           <div class="patient-name">${p.voornaam} ${p.naam}${ageStr}${gslStr}</div>
-          <div class="patient-sub">📍 ${p.adres || '—'}</div>
+          <div class="patient-sub">\uD83D\uDCCD ${p.adres || '\u2014'}</div>
         </div>
         <div class="badges">
           <span class="badge b-${p.status}">${p.status}</span>
@@ -2043,20 +2111,19 @@ function renderLijst() {
       </div>
       <div class="detail-body" id="det-${p.id}">
         <div class="detail-grid">
-          <div class="detail-field"><label>Telefoon</label><div class="val">${p.tel || '—'}</div></div>
-          <div class="detail-field"><label>Verzorging</label><div class="val">${p.ronde === 'beide' ? '☀️ ' + p.van + '–' + p.tot + ' · 🌙 ' + (p.vanAvond||'17:00') + '–' + (p.totAvond||'20:00') : p.van + '–' + p.tot} · ${p.duur} min</div></div>
+          <div class="detail-field"><label>Telefoon</label><div class="val">${p.tel || '\u2014'}</div></div>
+          <div class="detail-field"><label>Verzorging</label><div class="val">${p.ronde === 'beide' ? '\u2600\uFE0F ' + p.van + '\u2013' + p.tot + ' \xb7 \uD83C\uDF19 ' + (p.vanAvond||'17:00') + '\u2013' + (p.totAvond||'20:00') : p.van + '\u2013' + p.tot} \xb7 ${p.duur} min</div></div>
         </div>
         <div class="detail-grid">
-          <div class="detail-field"><label>Geslacht</label><div class="val">${gsl || '—'}</div></div>
+          <div class="detail-field"><label>Geslacht</label><div class="val">${gsl || '\u2014'}</div></div>
           <div class="detail-field"><label>Frequentie</label><div class="val">${freqOmschrijving(p.frequentie)}</div></div>
         </div>
-        <div class="detail-field"><label>Verpleegkundige zorgen</label><div class="val">${p.zorgen || '—'}</div></div>
-        ${medStr}
-        ${afwStr}
+        <div class="detail-field"><label>Verpleegkundige zorgen</label><div class="val">${p.zorgen || '\u2014'}</div></div>
+        ${medStr}${afwStr}${pauzeStr}
         <div class="detail-actions">
-          <button class="btn btn-sm" onclick="bewerkPatient(${p.id})">✏️ Bewerken</button>
-          <button class="btn btn-sm" style="background:var(--amber-pale);color:var(--amber);border-color:var(--amber)" onclick="toonPauzeerdialoog(${p.id})">${p.status === 'actief' ? '⏸ Pauzeren' : '▶️ Hervatten'}</button>
-          <button class="btn btn-sm btn-danger" onclick="verwijderPatient(${p.id})">🗑</button>
+          <button class="btn btn-sm" onclick="bewerkPatient(${p.id})">\u270F\uFE0F Bewerken</button>
+          <button class="btn btn-sm" style="background:var(--amber-pale);color:var(--amber);border-color:var(--amber)" onclick="toonPauzeerdialoog(${p.id})">${p.status === 'actief' ? '\u23F8 Pauzeren' : '\u25B6\uFE0F Hervatten'}</button>
+          <button class="btn btn-sm btn-danger" onclick="verwijderPatient(${p.id})">\uD83D\uDDD1</button>
         </div>
       </div>
     </div>`;
