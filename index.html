@@ -376,6 +376,34 @@ textarea { resize: vertical; min-height: 70px; }
   </div>
 </div>
 
+<!-- PAUZEER DIALOOG -->
+<div id="pauzeer-dialoog" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;padding:20px">
+  <div style="background:white;border-radius:var(--radius);padding:20px;max-width:320px;width:100%;display:flex;flex-direction:column;gap:12px">
+    <div style="font-size:15px;font-weight:500" id="pauzeer-titel">Zorg pauzeren</div>
+    <p style="font-size:13px;color:var(--text-muted)" id="pauzeer-tekst">Stel een einddatum in (optioneel). Na die datum wordt de patiënt automatisch terug actief gezet.</p>
+    <div class="field"><label>Einddatum (optioneel)</label><input type="date" id="pauzeer-einddatum"></div>
+    <div class="field"><label>Reden (optioneel)</label><input type="text" id="pauzeer-reden" placeholder="bv. vakantie, ziekenhuis..."></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-sm" onclick="sluitPauzeerdialoog()">Annuleren</button>
+      <button class="btn btn-sm btn-primary" id="pauzeer-bevestig-knop" onclick="bevestigPauzeer()">Pauzeren</button>
+    </div>
+  </div>
+</div>
+
+<!-- DUPLICAAT WAARSCHUWING -->
+<div id="duplicaat-dialoog" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;padding:20px">
+  <div style="background:white;border-radius:var(--radius);padding:20px;max-width:340px;width:100%;display:flex;flex-direction:column;gap:12px">
+    <div style="font-size:15px;font-weight:500;color:var(--amber)">⚠️ Mogelijke duplicaat</div>
+    <p style="font-size:13px;color:var(--text-muted)">Deze patiënt lijkt al te bestaan in het systeem:</p>
+    <div id="duplicaat-lijst" style="background:var(--cream);border-radius:var(--radius-sm);padding:10px;font-size:13px"></div>
+    <p style="font-size:12px;color:var(--text-muted)">Wil je toch een nieuw dossier aanmaken?</p>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-sm" onclick="sluitDuplicaatDialoog()">Annuleren</button>
+      <button class="btn btn-sm btn-primary" onclick="bevestigOpslaan()">Toch opslaan</button>
+    </div>
+  </div>
+</div>
+
 <!-- HEADER -->
 <div class="header">
   <div class="header-top">
@@ -550,6 +578,7 @@ textarea { resize: vertical; min-height: 70px; }
         <option value="vaste-dagen">Vaste dagen (bv. ma/wo/vr)</option>
         <option value="interval-dag">Interval in dagen (bv. om de 2 dagen)</option>
         <option value="interval-week">Interval in weken (bv. om de 2 weken)</option>
+        <option value="alternerend">Alternerende zorg (bv. avond aanhangen / ochtend afkoppelen)</option>
       </select>
     </div>
 
@@ -591,6 +620,16 @@ textarea { resize: vertical; min-height: 70px; }
         </div>
       </div>
     </div>
+
+    <div id="freq-alternerend" style="display:none">
+      <p class="schema-hint" style="margin-bottom:8px">Bv. dag 1 avond infuus aanhangen → dag 2 ochtend afkoppelen → dag 3 avond opnieuw aanhangen…</p>
+      <div class="form-grid">
+        <div class="field"><label>Startdatum cyclus</label><input type="date" id="f-alt-start"></div>
+        <div class="field"><label>Cyclus elke … dagen</label><input type="number" id="f-alt-interval" value="2" min="2" max="30"></div>
+      </div>
+      <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px" id="alt-stappen-lijst"></div>
+      <button type="button" class="btn btn-sm btn-outline" style="margin-top:6px" onclick="voegAltStapToe()">+ Stap toevoegen</button>
+    </div>
   </div>
   <div class="card">
     <div class="section-title">Zorgschema per dag <span style="font-weight:300;font-size:10px;color:var(--text-muted)">(optioneel — voor afwijkende duur of zorgen per dag)</span></div>
@@ -602,6 +641,12 @@ textarea { resize: vertical; min-height: 70px; }
     <div class="field">
       <label>Afwezig op (dag + activiteit)</label>
       <input type="text" id="f-afwezig" placeholder="bv. maandag kapper, woensdag kine">
+    </div>
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+      <div class="section-title" style="margin-bottom:6px">Niet-bezoek periode <span style="font-weight:300;font-size:10px;color:var(--text-muted)">(vakantie, ziekenhuis…)</span></div>
+      <p class="schema-hint" style="margin-bottom:8px">Stel een periode in tijdens dewelke we niet langsgaan. De patiënt verschijnt niet in de planning tijdens deze periode.</p>
+      <div id="niet-bezoek-lijst" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+      <button type="button" class="btn btn-sm btn-outline" onclick="voegNietBezoekToe()">+ Periode toevoegen</button>
     </div>
     <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
       <div class="section-title" style="margin-bottom:6px">Tijdsbeperkingen per dag <span style="font-weight:300;font-size:10px;color:var(--text-muted)">(optioneel)</span></div>
@@ -1114,6 +1159,245 @@ Notities:
     setStatus('✗ ' + e.message, 'rood');
   }
 }
+// ── NIET-BEZOEK PERIODES ──────────────────────────────────────────
+let nietBezoekPeriodes = [];
+
+function renderNietBezoekLijst() {
+  const el = document.getElementById('niet-bezoek-lijst');
+  if (!el) return;
+  if (!nietBezoekPeriodes.length) { el.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">Geen periodes ingesteld</div>'; return; }
+  el.innerHTML = nietBezoekPeriodes.map((p, i) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--amber-pale);border-radius:var(--radius-sm);font-size:12px">
+      <span style="flex:1;color:var(--amber)">\uD83D\uDEAB ${p.van} \u2192 ${p.tot || 'onbepaald'}${p.reden ? ' \xb7 ' + p.reden : ''}</span>
+      <button type="button" class="btn btn-sm btn-danger" style="padding:2px 8px" onclick="verwijderNietBezoek(${i})">\u2715</button>
+    </div>`).join('');
+}
+
+function voegNietBezoekToe() {
+  const container = document.getElementById('niet-bezoek-lijst');
+  const today = new Date().toISOString().slice(0,10);
+  const tempId = 'nbp-edit-' + Date.now();
+  container.insertAdjacentHTML('beforeend', `
+    <div id="${tempId}" style="background:var(--green-pale);border-radius:var(--radius-sm);padding:8px;display:flex;flex-direction:column;gap:6px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div class="field"><label>Van</label><input type="date" id="nbp-van-${tempId}" value="${today}"></div>
+        <div class="field"><label>Tot (leeg = open einde)</label><input type="date" id="nbp-tot-${tempId}"></div>
+      </div>
+      <div class="field"><label>Reden</label><input type="text" id="nbp-reden-${tempId}" placeholder="bv. vakantie, ziekenhuis"></div>
+      <button type="button" class="btn btn-sm btn-primary" onclick="bevestigNietBezoek('${tempId}')">Bevestigen</button>
+    </div>`);
+}
+
+function bevestigNietBezoek(tempId) {
+  const van = document.getElementById('nbp-van-' + tempId).value;
+  const tot = document.getElementById('nbp-tot-' + tempId).value;
+  const reden = document.getElementById('nbp-reden-' + tempId).value;
+  if (!van) { alert('Vul een startdatum in.'); return; }
+  nietBezoekPeriodes.push({ van, tot, reden });
+  document.getElementById(tempId).remove();
+  renderNietBezoekLijst();
+}
+
+function verwijderNietBezoek(i) {
+  nietBezoekPeriodes.splice(i, 1);
+  renderNietBezoekLijst();
+}
+
+function laadNietBezoek(periodes) {
+  nietBezoekPeriodes = periodes ? [...periodes] : [];
+  renderNietBezoekLijst();
+}
+
+function isInNietBezoekPeriode(p, datum) {
+  if (!p.nietBezoek || !p.nietBezoek.length) return false;
+  const d = datum.toISOString().slice(0,10);
+  return p.nietBezoek.some(nb => {
+    if (!nb.van) return false;
+    if (d < nb.van) return false;
+    if (nb.tot && d > nb.tot) return false;
+    return true;
+  });
+}
+
+// ── ALTERNERENDE ZORG ─────────────────────────────────────────────
+let altStappen = [];
+
+function voegAltStapToe() {
+  altStappen.push({ ronde: 'avond', zorgen: '', duur: 30, dagOffset: altStappen.length });
+  renderAltStappen();
+}
+
+function renderAltStappen() {
+  const el = document.getElementById('alt-stappen-lijst');
+  if (!el) return;
+  if (!altStappen.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">Nog geen stappen — klik op + Stap toevoegen</div>';
+    return;
+  }
+  el.innerHTML = altStappen.map((s, i) => `
+    <div style="background:var(--cream);border-radius:var(--radius-sm);padding:8px;display:grid;grid-template-columns:56px 1fr 56px 70px auto;gap:6px;align-items:end">
+      <div class="field"><label style="font-size:10px">Dag +</label>
+        <input type="number" min="0" max="30" value="${s.dagOffset}" style="padding:4px 6px;font-size:12px" onchange="altStappen[${i}].dagOffset=parseInt(this.value)||0">
+      </div>
+      <div class="field"><label style="font-size:10px">Zorgen</label>
+        <input type="text" value="${s.zorgen}" placeholder="bv. infuus aanhangen" style="font-size:12px;padding:5px 8px" onchange="altStappen[${i}].zorgen=this.value">
+      </div>
+      <div class="field"><label style="font-size:10px">Min</label>
+        <input type="number" min="5" max="180" value="${s.duur}" style="padding:4px 6px;font-size:12px" onchange="altStappen[${i}].duur=parseInt(this.value)||30">
+      </div>
+      <div class="field"><label style="font-size:10px">Ronde</label>
+        <select style="padding:5px 6px;font-size:11px;width:100%" onchange="altStappen[${i}].ronde=this.value">
+          <option value="ochtend" ${s.ronde==='ochtend'?'selected':''}>Ochtend</option>
+          <option value="avond" ${s.ronde==='avond'?'selected':''}>Avond</option>
+        </select>
+      </div>
+      <button type="button" class="btn btn-sm btn-danger" style="padding:5px 8px" onclick="verwijderAltStap(${i})">\u2715</button>
+    </div>`).join('');
+}
+
+function verwijderAltStap(i) {
+  altStappen.splice(i, 1);
+  renderAltStappen();
+}
+
+function laadAltStappen(stappen) {
+  altStappen = stappen ? [...stappen] : [];
+  renderAltStappen();
+}
+
+function alternerendActiefOp(p, datum) {
+  const freq = p.frequentie;
+  if (!freq || freq.type !== 'alternerend' || !freq.start || !freq.stappen || !freq.stappen.length) return [];
+  const start = new Date(freq.start + 'T12:00:00');
+  const interval = freq.interval || 2;
+  const diffDagen = Math.round((datum - start) / 86400000);
+  if (diffDagen < 0) return [];
+  const cyclusDag = diffDagen % interval;
+  return freq.stappen.filter(s => (s.dagOffset || 0) === cyclusDag);
+}
+
+// ── PAUZEER DIALOOG ───────────────────────────────────────────────
+let pauzeerPatientId = null;
+
+function toonPauzeerdialoog(id) {
+  const p = patienten.find(x => x.id === id);
+  if (!p) return;
+  pauzeerPatientId = id;
+  const titel = document.getElementById('pauzeer-titel');
+  const knop = document.getElementById('pauzeer-bevestig-knop');
+  const einddatumLabel = document.getElementById('pauzeer-einddatum').previousElementSibling;
+  if (p.status === 'actief') {
+    titel.textContent = p.voornaam + ' ' + p.naam + ' pauzeren';
+    knop.textContent = 'Pauzeren';
+    document.getElementById('pauzeer-tekst').textContent = 'Stel een einddatum in (optioneel). Na die datum wordt de patiënt automatisch terug actief.';
+    document.getElementById('pauzeer-einddatum').style.display = 'block';
+    if (einddatumLabel) einddatumLabel.style.display = 'block';
+  } else {
+    titel.textContent = p.voornaam + ' ' + p.naam + ' hervatten';
+    knop.textContent = 'Hervatten';
+    document.getElementById('pauzeer-tekst').textContent = 'De patiënt wordt terug actief gezet in de planning.';
+    document.getElementById('pauzeer-einddatum').style.display = 'none';
+    if (einddatumLabel) einddatumLabel.style.display = 'none';
+  }
+  document.getElementById('pauzeer-einddatum').value = '';
+  document.getElementById('pauzeer-reden').value = p.pauzeReden || '';
+  document.getElementById('pauzeer-dialoog').style.display = 'flex';
+}
+
+function sluitPauzeerdialoog() {
+  document.getElementById('pauzeer-dialoog').style.display = 'none';
+  pauzeerPatientId = null;
+}
+
+function bevestigPauzeer() {
+  const p = patienten.find(x => x.id === pauzeerPatientId);
+  if (!p) return;
+  if (p.status === 'actief') {
+    p.status = 'inactief';
+    p.pauzeEinddatum = document.getElementById('pauzeer-einddatum').value || null;
+    p.pauzeReden = document.getElementById('pauzeer-reden').value || null;
+  } else {
+    p.status = 'actief';
+    p.pauzeEinddatum = null;
+    p.pauzeReden = null;
+  }
+  saveData();
+  renderLijst();
+  sluitPauzeerdialoog();
+}
+
+function checkPauzeHervat() {
+  const vandaag = new Date().toISOString().slice(0,10);
+  let gewijzigd = false;
+  patienten.forEach(p => {
+    if (p.status === 'inactief' && p.pauzeEinddatum && vandaag > p.pauzeEinddatum) {
+      p.status = 'actief'; p.pauzeEinddatum = null; gewijzigd = true;
+    }
+  });
+  if (gewijzigd) { saveData(); renderLijst(); }
+}
+
+// ── DUPLICAAT DETECTIE ────────────────────────────────────────────
+let pendingPatient = null;
+
+function checkDuplicaat(p) {
+  return patienten.filter(bestaand => {
+    if (bestaand.id === p.id) return false;
+    const zelfdeNaamGeb = bestaand.voornaam?.toLowerCase() === p.voornaam?.toLowerCase()
+      && bestaand.naam?.toLowerCase() === p.naam?.toLowerCase()
+      && bestaand.geb && p.geb && bestaand.geb === p.geb;
+    const zelfdeAdres = bestaand.adres && p.adres
+      && bestaand.adres.toLowerCase().trim() === p.adres.toLowerCase().trim();
+    return zelfdeNaamGeb || zelfdeAdres;
+  });
+}
+
+function sluitDuplicaatDialoog() {
+  document.getElementById('duplicaat-dialoog').style.display = 'none';
+  pendingPatient = null;
+}
+
+function bevestigOpslaan() {
+  sluitDuplicaatDialoog();
+  if (pendingPatient) voerOpslaanUit(pendingPatient);
+}
+
+function voerOpslaanUit(p) {
+  if (editId) {
+    patienten = patienten.map(x => x.id === editId ? p : x);
+  } else {
+    patienten.push(p);
+  }
+  saveData();
+  editId = null;
+  resetFormulier();
+  const msg = document.getElementById('save-ok');
+  msg.textContent = '\u2713 ' + p.voornaam + ' ' + p.naam + ' opgeslagen';
+  msg.style.display = 'block';
+  setTimeout(() => msg.style.display = 'none', 3000);
+  showTab('lijst');
+}
+
+function resetFormulier() {
+  ['voornaam','naam','adres','geb','tel','zorgen','afwezig','medisch','lat','lon'].forEach(f => {
+    document.getElementById('f-' + f).value = '';
+  });
+  document.getElementById('f-duur').value = '30';
+  document.getElementById('f-van').value = '07:00';
+  document.getElementById('f-tot').value = '09:30';
+  document.getElementById('f-van-avond').value = '17:00';
+  document.getElementById('f-tot-avond').value = '20:00';
+  document.getElementById('f-status').value = 'actief';
+  document.getElementById('f-ronde').value = 'ochtend';
+  toggleRondeUren();
+  initDagSchemaForm({});
+  initTijdsSchemaForm({});
+  laadNietBezoek([]);
+  laadFrequentie(null);
+  altStappen = [];
+  renderAltStappen();
+}
+
 function toggleRondeUren() {
   const ronde = document.getElementById('f-ronde').value;
   document.getElementById('uren-ochtend').style.display = (ronde === 'ochtend' || ronde === 'beide') ? 'block' : 'none';
@@ -1130,6 +1414,7 @@ function toggleFreqType() {
   document.getElementById('freq-vaste-dagen').style.display = t === 'vaste-dagen' ? 'block' : 'none';
   document.getElementById('freq-interval-dag').style.display = t === 'interval-dag' ? 'block' : 'none';
   document.getElementById('freq-interval-week').style.display = t === 'interval-week' ? 'block' : 'none';
+  document.getElementById('freq-alternerend').style.display = t === 'alternerend' ? 'block' : 'none';
 }
 
 function toggleDagKnop(btn) {
@@ -1155,6 +1440,10 @@ function leesFrequentie() {
     freq.start = document.getElementById('f-interval-week-start').value;
     const actDag = document.querySelector('#freq-week-dagknoppen .dag-knop.actief');
     freq.dag = actDag ? actDag.dataset.dag : null;
+  } else if (t === 'alternerend') {
+    freq.interval = parseInt(document.getElementById('f-alt-interval').value) || 2;
+    freq.start = document.getElementById('f-alt-start').value;
+    freq.stappen = altStappen.map(s => ({...s}));
   }
   return freq;
 }
@@ -1180,6 +1469,10 @@ function laadFrequentie(freq) {
     document.querySelectorAll('#freq-week-dagknoppen .dag-knop').forEach(b => {
       b.classList.toggle('actief', b.dataset.dag === freq.dag);
     });
+  } else if (freq.type === 'alternerend') {
+    document.getElementById('f-alt-interval').value = freq.interval || 2;
+    document.getElementById('f-alt-start').value = freq.start || '';
+    laadAltStappen(freq.stappen || []);
   }
 }
 
@@ -1196,28 +1489,29 @@ function isAanDeBeurt(p, datum) {
   if (freq.type === 'interval-dag' || freq.type === 'interval-week') {
     if (!freq.start) return true;
     const start = new Date(freq.start + 'T12:00:00');
-    const interval = freq.type === 'interval-dag'
-      ? freq.interval
-      : freq.interval * 7;
-
+    const interval = freq.type === 'interval-dag' ? freq.interval : freq.interval * 7;
     if (freq.type === 'interval-week') {
-      // Moet ook op de juiste weekdag zijn
       if (freq.dag && dagShort !== freq.dag) return false;
     }
-
     const diffDagen = Math.round((datum - start) / 86400000);
     if (diffDagen < 0) return false;
     return diffDagen % interval === 0;
   }
+
+  if (freq.type === 'alternerend') {
+    return alternerendActiefOp(p, datum).length > 0;
+  }
+
   return true;
 }
 
 function freqOmschrijving(freq) {
   if (!freq || freq.type === 'dagelijks') return 'Dagelijks';
-  if (freq.type === 'vaste-dagen') return freq.dagen && freq.dagen.length ? freq.dagen.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(' · ') : '—';
-  if (freq.type === 'interval-dag') return `Om de ${freq.interval} dagen`;
-  if (freq.type === 'interval-week') return `Om de ${freq.interval} weken${freq.dag ? ' op ' + freq.dag : ''}`;
-  return '—';
+  if (freq.type === 'vaste-dagen') return freq.dagen && freq.dagen.length ? freq.dagen.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(' \xb7 ') : '\u2014';
+  if (freq.type === 'interval-dag') return 'Om de ' + freq.interval + ' dagen';
+  if (freq.type === 'interval-week') return 'Om de ' + freq.interval + ' weken' + (freq.dag ? ' op ' + freq.dag : '');
+  if (freq.type === 'alternerend') return 'Alternerende zorg (' + (freq.interval || 2) + '-daags)';
+  return '\u2014';
 }
 
 function duurOpDatum(p, datum) {
@@ -1399,7 +1693,7 @@ function loadData() {
     const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
     if (data && Array.isArray(data)) {
       return data.map(p => ({
-        geslacht: '', frequentie: { type: 'dagelijks' }, dagSchema: {}, tijdsSchema: {}, ...p
+        geslacht: '', frequentie: { type: 'dagelijks' }, dagSchema: {}, tijdsSchema: {}, nietBezoek: [], ...p
       }));
     }
     return defaultPatients();
@@ -1434,6 +1728,7 @@ let nextId = () => Math.max(0, ...patienten.map(p => p.id)) + 1;
 window.addEventListener('load', async () => {
   await checkLoginBijStart();
   initHeader();
+  checkPauzeHervat();
   renderLijst();
   document.getElementById('ronde-datum').valueAsDate = new Date();
   checkBirthdays();
@@ -1596,6 +1891,7 @@ function renderLijst() {
         ${afwStr}
         <div class="detail-actions">
           <button class="btn btn-sm" onclick="bewerkPatient(${p.id})">✏️ Bewerken</button>
+          <button class="btn btn-sm" style="background:var(--amber-pale);color:var(--amber);border-color:var(--amber)" onclick="toonPauzeerdialoog(${p.id})">${p.status === 'actief' ? '⏸ Pauzeren' : '▶️ Hervatten'}</button>
           <button class="btn btn-sm btn-danger" onclick="verwijderPatient(${p.id})">🗑</button>
         </div>
       </div>
@@ -1637,6 +1933,7 @@ function bewerkPatient(id) {
   F('lon').value = p.lon || '';
   initDagSchemaForm(p.dagSchema || {});
   initTijdsSchemaForm(p.tijdsSchema || {});
+  laadNietBezoek(p.nietBezoek || []);
   laadFrequentie(p.frequentie || null);
   showTab('nieuw');
   document.getElementById('pane-nieuw').scrollTo(0, 0);
@@ -1676,39 +1973,26 @@ function slaPatientOp() {
     lon: parseFloat(F('lon')) || null,
     dagSchema: leesDagSchema(),
     tijdsSchema: leesTijdsSchema(),
-    frequentie: leesFrequentie()
+    frequentie: leesFrequentie(),
+    nietBezoek: [...nietBezoekPeriodes]
   };
 
-  if (editId) {
-    patienten = patienten.map(x => x.id === editId ? p : x);
-  } else {
-    patienten.push(p);
+  if (!editId) {
+    const dubbels = checkDuplicaat(p);
+    if (dubbels.length > 0) {
+      pendingPatient = p;
+      document.getElementById('duplicaat-lijst').innerHTML = dubbels.map(d =>
+        '<div style="font-weight:500">' + d.voornaam + ' ' + d.naam + '</div>' +
+        '<div style="color:var(--text-muted);font-size:12px">' + (d.adres || '') + (d.geb ? ' · ' + d.geb : '') + '</div>'
+      ).join('<hr style="border:none;border-top:1px solid var(--border);margin:4px 0">');
+      document.getElementById('duplicaat-dialoog').style.display = 'flex';
+      return;
+    }
   }
-  saveData();
-  editId = null;
 
-  // reset form
-  ['voornaam','naam','adres','geb','tel','zorgen','afwezig','medisch','lat','lon'].forEach(f => {
-    document.getElementById('f-' + f).value = '';
-  });
-  document.getElementById('f-duur').value = '30';
-  document.getElementById('f-van').value = '07:00';
-  document.getElementById('f-tot').value = '09:30';
-  document.getElementById('f-van-avond').value = '17:00';
-  document.getElementById('f-tot-avond').value = '20:00';
-  document.getElementById('f-status').value = 'actief';
-  document.getElementById('f-ronde').value = 'ochtend';
-  toggleRondeUren();
-  initDagSchemaForm({});
-  initTijdsSchemaForm({});
-  laadFrequentie(null);
-
-  const msg = document.getElementById('save-ok');
-  msg.textContent = '✓ ' + p.voornaam + ' ' + p.naam + (editId ? ' bijgewerkt' : ' opgeslagen');
-  msg.style.display = 'block';
-  setTimeout(() => msg.style.display = 'none', 3000);
-  showTab('lijst');
+  voerOpslaanUit(p);
 }
+
 
 // ── RONDES GENERATOR ──────────────────────────────────────────────
 function genereerRondes() {
@@ -1721,6 +2005,7 @@ function genereerRondes() {
     p.status === 'actief'
     && !afwezigOp(p, dagNaam)
     && isAanDeBeurt(p, d)
+    && !isInNietBezoekPeriode(p, d)
   );
 
   // Verrijk elke patiënt met de duur/zorgen voor deze specifieke dag
