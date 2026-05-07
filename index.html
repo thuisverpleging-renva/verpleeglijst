@@ -171,6 +171,7 @@ body {
 }
 .b-actief { background: var(--green-pale); color: var(--green); }
 .b-inactief { background: var(--cream-dark); color: var(--text-muted); }
+.b-overleden { background: #f0f0f0; color: #555; }
 .b-ochtend { background: var(--blue-pale); color: var(--blue); }
 .b-avond { background: #ede8f8; color: #4a2d8a; }
 .b-beide { background: var(--amber-pale); color: var(--amber); }
@@ -472,6 +473,7 @@ textarea { resize: vertical; min-height: 70px; }
       <option value="all">Alle statussen</option>
       <option value="actief">Actief</option>
       <option value="inactief">Inactief</option>
+      <option value="overleden">Overleden</option>
     </select>
     <select id="filter-geslacht" style="flex:1;min-width:100px;font-size:13px" onchange="renderLijst()">
       <option value="all">Alle geslachten</option>
@@ -2121,18 +2123,18 @@ function renderLijst() {
   const actief = patienten.filter(p => p.status === 'actief');
   const vandaagDatum = new Date();
   const vandaagActief = actief.filter(p => !afwezigOp(p, vandaag) && isAanDeBeurt(p, vandaagDatum) && !isInNietBezoekPeriode(p, vandaagDatum));
-  document.getElementById('s-totaal').textContent = patienten.length;
+  document.getElementById('s-totaal').textContent = patienten.filter(p => p.status !== 'overleden').length;
   document.getElementById('s-actief').textContent = actief.length;
   document.getElementById('s-vandaag').textContent = vandaagActief.length;
-  document.getElementById('s-vrouw').textContent = patienten.filter(p => p.geslacht === 'v').length;
-  document.getElementById('s-man').textContent = patienten.filter(p => p.geslacht === 'm').length;
+  document.getElementById('s-vrouw').textContent = patienten.filter(p => p.geslacht === 'v' && p.status !== 'overleden').length;
+  document.getElementById('s-man').textContent = patienten.filter(p => p.geslacht === 'm' && p.status !== 'overleden').length;
 
-  // Filter
+  // Filter — verberg standaard overleden patiënten tenzij expliciet gefilterd
   let gefilterd = patienten.filter(p => {
     const nm = (p.voornaam + ' ' + p.naam).toLowerCase();
     const adr = (p.adres || '').toLowerCase();
     const zoekOk = nm.includes(q) || adr.includes(q);
-    const statusOk = fs === 'all' || p.status === fs;
+    const statusOk = fs === 'all' ? p.status !== 'overleden' : p.status === fs;
     const geslachtOk = fg === 'all' || p.geslacht === fg;
     return zoekOk && statusOk && geslachtOk;
   });
@@ -2178,6 +2180,7 @@ function renderLijst() {
     const medStr = p.medisch ? '<div class="detail-field"><label>Medisch profiel</label><div class="val"><span class="badge b-med">\u2695 ' + p.medisch + '</span></div></div>' : '';
     const afwStr = p.afwezig ? '<div class="detail-field"><label>Afwezigheden</label><div class="val">' + p.afwezig + '</div></div>' : '';
     const pauzeStr = p.pauzeReden ? '<div class="detail-field"><label>Pauzeer reden</label><div class="val" style="color:var(--amber)">' + p.pauzeReden + (p.pauzeEinddatum ? ' (tot ' + p.pauzeEinddatum + ')' : '') + '</div></div>' : '';
+    const overledenStr = p.overledenDatum ? '<div class="detail-field"><label>Overlijdensdatum</label><div class="val" style="color:#555">✝ ' + new Date(p.overledenDatum + 'T12:00:00').toLocaleDateString("nl-BE", {day:"numeric",month:"long",year:"numeric"}) + '</div></div>' : '';
 
     // Groepsheader bij geslacht-sortering
     let groepHeader = '';
@@ -2214,10 +2217,13 @@ function renderLijst() {
           <div class="detail-field"><label>Frequentie</label><div class="val">${freqOmschrijving(p.frequentie)}</div></div>
         </div>
         <div class="detail-field"><label>Verpleegkundige zorgen</label><div class="val">${p.zorgen || '\u2014'}</div></div>
-        ${medStr}${afwStr}${pauzeStr}
+        ${medStr}${afwStr}${pauzeStr}${overledenStr}
         <div class="detail-actions">
           <button class="btn btn-sm" onclick="bewerkPatient(${p.id})">\u270F\uFE0F Bewerken</button>
-          <button class="btn btn-sm" style="background:var(--amber-pale);color:var(--amber);border-color:var(--amber)" onclick="toonPauzeerdialoog(${p.id})">${p.status === 'actief' ? '\u23F8 Pauzeren' : '\u25B6\uFE0F Hervatten'}</button>
+          ${p.status !== 'overleden' ? `<button class="btn btn-sm" style="background:var(--amber-pale);color:var(--amber);border-color:var(--amber)" onclick="toonPauzeerdialoog(${p.id})">${p.status === 'actief' ? '\u23F8 Pauzeren' : '\u25B6\uFE0F Hervatten'}</button>` : ''}
+          ${p.status !== 'overleden'
+            ? `<button class="btn btn-sm" style="background:#f0f0f0;color:#555;border-color:#ccc" onclick="markeerOverleden(${p.id})">✝ Overleden</button>`
+            : `<button class="btn btn-sm" style="background:var(--green-pale);color:var(--green);border-color:var(--green-mid)" onclick="herstelVanOverleden(${p.id})">↩ Herstellen</button>`}
           <button class="btn btn-sm btn-danger" onclick="verwijderPatient(${p.id})">\uD83D\uDDD1</button>
         </div>
       </div>
@@ -2332,6 +2338,7 @@ function genereerRondes() {
     && !afwezigOp(p, dagNaam)
     && isAanDeBeurt(p, d)
     && !isInNietBezoekPeriode(p, d)
+    && p.status !== 'overleden'
   );
 
   // Verrijk elke patiënt met dag-specifieke info
@@ -2452,7 +2459,27 @@ function genereerRondes() {
   }).join('');
 }
 
-// ── BULK IMPORT ───────────────────────────────────────────────────
+// ── OVERLEDEN ────────────────────────────────────────────────────
+function markeerOverleden(id) {
+  const p = patienten.find(x => x.id === id);
+  if (!p) return;
+  if (!confirm(p.voornaam + ' ' + p.naam + ' markeren als overleden?\nDe patiënt verdwijnt uit de actieve planning maar blijft bewaard in het systeem.')) return;
+  p.status = 'overleden';
+  p.overledenDatum = new Date().toISOString().slice(0,10);
+  p.pauzeEinddatum = null;
+  saveData();
+  renderLijst();
+}
+
+function herstelVanOverleden(id) {
+  const p = patienten.find(x => x.id === id);
+  if (!p) return;
+  if (!confirm('Status van ' + p.voornaam + ' ' + p.naam + ' terugzetten naar inactief?')) return;
+  p.status = 'inactief';
+  p.overledenDatum = null;
+  saveData();
+  renderLijst();
+}
 const BULK_KEY = 'vp_bulk_wachtrij';
 let bulkWachtrij = [];
 
