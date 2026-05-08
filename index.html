@@ -520,15 +520,17 @@ textarea { resize: vertical; min-height: 70px; }
 <!-- ══════════════════ NIEUWE PATIËNT ══════════════════ -->
 <div class="pane" id="pane-nieuw">
 
-  <!-- FOTO IMPORT BANNER -->
-  <div class="card" style="border:1.5px dashed var(--green-mid);background:var(--green-pale)">
-    <div class="section-title" style="color:var(--green)">📷 Patiënt importeren via foto</div>
-    <p style="font-size:13px;color:var(--text-muted);margin:6px 0 10px">Maak een screenshot van je andere app en upload die hier. Claude leest de gegevens automatisch uit en vult het formulier in.</p>
-    <label class="btn btn-primary btn-full" style="cursor:pointer;justify-content:center" id="foto-label">
-      📷 Kies screenshot of foto
-      <input type="file" accept="image/*" id="foto-input" style="display:none" onchange="importeerViaFoto(event)">
-    </label>
-    <div id="foto-status" style="display:none;margin-top:8px;font-size:13px;padding:8px 10px;border-radius:var(--radius-sm)"></div>
+  <!-- FOTO IMPORT BANNER — alleen zichtbaar bij nieuw aanmaken -->
+  <div id="foto-import-sectie">
+    <div class="card" style="border:1.5px dashed var(--green-mid);background:var(--green-pale)">
+      <div class="section-title" style="color:var(--green)">📷 Patiënt importeren via foto</div>
+      <p style="font-size:13px;color:var(--text-muted);margin:6px 0 10px">Maak een screenshot van je andere app en upload die hier. Claude leest de gegevens automatisch uit en vult het formulier in.</p>
+      <label class="btn btn-primary btn-full" style="cursor:pointer;justify-content:center" id="foto-label">
+        📷 Kies screenshot of foto
+        <input type="file" accept="image/*" id="foto-input" style="display:none" onchange="importeerViaFoto(event)">
+      </label>
+      <div id="foto-status" style="display:none;margin-top:8px;font-size:13px;padding:8px 10px;border-radius:var(--radius-sm)"></div>
+    </div>
   </div>
 
   <div class="card">
@@ -558,6 +560,7 @@ textarea { resize: vertical; min-height: 70px; }
         <select id="f-status">
           <option value="actief">Actief</option>
           <option value="inactief">Inactief</option>
+          <option value="overleden">✝ Overleden</option>
         </select>
       </div>
     </div>
@@ -663,9 +666,21 @@ textarea { resize: vertical; min-height: 70px; }
   <div class="card">
     <div class="section-title">Afwezigheden & tijdsbeperkingen</div>
     <div class="field">
-      <label>Afwezig op (dag + activiteit)</label>
-      <input type="text" id="f-afwezig" placeholder="bv. maandag kapper, woensdag kine">
+      <label>Wekelijks afwezig op</label>
+      <p style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Tik de dag(en) aan waarop we nooit langsgaan (bv. altijd zondag vrij)</p>
+      <div style="display:flex;flex-wrap:wrap;gap:6px" id="afwezig-dagen-knoppen">
+        <button type="button" class="dag-knop" data-dag="maandag" onclick="toggleAfwezigDag(this)">Ma</button>
+        <button type="button" class="dag-knop" data-dag="dinsdag" onclick="toggleAfwezigDag(this)">Di</button>
+        <button type="button" class="dag-knop" data-dag="woensdag" onclick="toggleAfwezigDag(this)">Wo</button>
+        <button type="button" class="dag-knop" data-dag="donderdag" onclick="toggleAfwezigDag(this)">Do</button>
+        <button type="button" class="dag-knop" data-dag="vrijdag" onclick="toggleAfwezigDag(this)">Vr</button>
+        <button type="button" class="dag-knop" data-dag="zaterdag" onclick="toggleAfwezigDag(this)">Za</button>
+        <button type="button" class="dag-knop" data-dag="zondag" onclick="toggleAfwezigDag(this)">Zo</button>
+      </div>
     </div>
+    <div class="field" style="margin-top:8px">
+      <label>Extra afwezigheidsinfo (optioneel)</label>
+      <input type="text" id="f-afwezig-extra" placeholder="bv. maandag kapper 10u, woensdag kine"></div>
     <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
       <div class="section-title" style="margin-bottom:6px">Niet-bezoek periode <span style="font-weight:300;font-size:10px;color:var(--text-muted)">(vakantie, ziekenhuis…)</span></div>
       <p class="schema-hint" style="margin-bottom:8px">Stel een periode in tijdens dewelke we niet langsgaan. De patiënt verschijnt niet in de planning tijdens deze periode.</p>
@@ -676,6 +691,12 @@ textarea { resize: vertical; min-height: 70px; }
       <div class="section-title" style="margin-bottom:6px">Tijdsbeperkingen per dag <span style="font-weight:300;font-size:10px;color:var(--text-muted)">(optioneel)</span></div>
       <p class="schema-hint" style="margin-bottom:8px">Vink een dag aan als er een tijdsbeperking geldt, bv. "klaar vóór 10:00" of "niet vóór 09:00".</p>
       <div id="tijds-schema-form" style="display:flex;flex-direction:column;gap:6px"></div>
+    </div>
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+      <div class="section-title" style="margin-bottom:6px">Eenmalige tijdsafwijking <span style="font-weight:300;font-size:10px;color:var(--text-muted)">(uitzonderlijk vroeger/later op 1 specifieke dag)</span></div>
+      <p class="schema-hint" style="margin-bottom:8px">Bv. volgende dinsdag uitzonderlijk klaar voor 11:00 wegens doktersafspraak.</p>
+      <div id="eenmalig-lijst" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+      <button type="button" class="btn btn-sm btn-outline" onclick="voegEenmaligToe()">+ Afwijking toevoegen</button>
     </div>
     <div class="field" style="margin-top:12px">
       <label>Medisch profiel</label>
@@ -1456,9 +1477,119 @@ function resetFormulier() {
   initDagSchemaForm({});
   initTijdsSchemaForm({});
   laadNietBezoek([]);
+  laadEenmalig([]);
+  laadAfwezig('');
   laadFrequentie(null);
   altStappen = [];
   renderAltStappen();
+  // Toon foto-import terug bij nieuw formulier
+  document.getElementById('foto-import-sectie').style.display = 'block';
+}
+
+// ── EENMALIGE TIJDSAFWIJKING ──────────────────────────────────────
+let eenmaligAfwijkingen = [];
+
+function renderEenmaligLijst() {
+  const el = document.getElementById('eenmalig-lijst');
+  if (!el) return;
+  // Verwijder verlopen afwijkingen automatisch uit weergave
+  const vandaag = new Date().toISOString().slice(0,10);
+  if (!eenmaligAfwijkingen.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">Geen afwijkingen ingesteld</div>';
+    return;
+  }
+  el.innerHTML = eenmaligAfwijkingen.map((a, i) => {
+    const verlopen = a.datum < vandaag;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:${verlopen ? 'var(--cream-dark)' : 'var(--blue-pale)'};border-radius:var(--radius-sm);font-size:12px;opacity:${verlopen ? '0.6' : '1'}">
+      <span style="font-size:14px">${verlopen ? '✓' : '⚠️'}</span>
+      <span style="flex:1;color:var(--text)"><strong>${a.datum}</strong>${a.voor ? ' · klaar vóór <strong>' + a.voor + '</strong>' : ''}${a.niet ? ' · niet vóór <strong>' + a.niet + '</strong>' : ''}${a.reden ? ' · ' + a.reden : ''}${verlopen ? ' <em style="color:var(--text-muted)">(verlopen)</em>' : ''}</span>
+      <button type="button" class="btn btn-sm btn-danger" style="padding:2px 8px" onclick="verwijderEenmalig(${i})">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function voegEenmaligToe() {
+  const container = document.getElementById('eenmalig-lijst');
+  const morgen = new Date(); morgen.setDate(morgen.getDate() + 1);
+  const morgenStr = morgen.toISOString().slice(0,10);
+  const tempId = 'em-edit-' + Date.now();
+  container.insertAdjacentHTML('beforeend', `
+    <div id="${tempId}" style="background:var(--blue-pale);border-radius:var(--radius-sm);padding:10px;display:flex;flex-direction:column;gap:8px">
+      <div class="form-grid">
+        <div class="field"><label>Datum</label><input type="date" id="em-datum-${tempId}" value="${morgenStr}" min="${new Date().toISOString().slice(0,10)}"></div>
+        <div class="field"><label>Reden (optioneel)</label><input type="text" id="em-reden-${tempId}" placeholder="bv. doktersafspraak"></div>
+      </div>
+      <div class="form-grid">
+        <div class="field"><label>Klaar vóór (optioneel)</label><input type="time" id="em-voor-${tempId}"></div>
+        <div class="field"><label>Niet vóór (optioneel)</label><input type="time" id="em-niet-${tempId}"></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button type="button" class="btn btn-sm" onclick="document.getElementById('${tempId}').remove()">Annuleren</button>
+        <button type="button" class="btn btn-sm btn-primary" onclick="bevestigEenmalig('${tempId}')">Bevestigen</button>
+      </div>
+    </div>`);
+}
+
+function bevestigEenmalig(tempId) {
+  const datum = document.getElementById('em-datum-' + tempId).value;
+  if (!datum) { alert('Vul een datum in.'); return; }
+  const voor = document.getElementById('em-voor-' + tempId).value;
+  const niet = document.getElementById('em-niet-' + tempId).value;
+  const reden = document.getElementById('em-reden-' + tempId).value;
+  if (!voor && !niet) { alert('Vul minstens een "klaar vóór" of "niet vóór" tijd in.'); return; }
+  eenmaligAfwijkingen.push({ datum, voor: voor || null, niet: niet || null, reden: reden || null });
+  document.getElementById(tempId).remove();
+  renderEenmaligLijst();
+}
+
+function verwijderEenmalig(i) {
+  eenmaligAfwijkingen.splice(i, 1);
+  renderEenmaligLijst();
+}
+
+function laadEenmalig(afwijkingen) {
+  // Verwijder automatisch verlopen afwijkingen bij laden
+  const vandaag = new Date().toISOString().slice(0,10);
+  eenmaligAfwijkingen = (afwijkingen || []).filter(a => a.datum >= vandaag);
+  renderEenmaligLijst();
+}
+
+function getEenmaligVoorDatum(p, datum) {
+  if (!p.eenmaligAfwijkingen || !p.eenmaligAfwijkingen.length) return null;
+  const datumStr = datum.toISOString().slice(0,10);
+  return p.eenmaligAfwijkingen.find(a => a.datum === datumStr) || null;
+}
+
+// ── AFWEZIG DAGEN KNOPPEN ─────────────────────────────────────────
+function toggleAfwezigDag(btn) {
+  btn.classList.toggle('actief');
+}
+
+function leesAfwezig() {
+  const dagen = Array.from(document.querySelectorAll('#afwezig-dagen-knoppen .dag-knop.actief'))
+    .map(b => b.dataset.dag);
+  const extra = document.getElementById('f-afwezig-extra').value.trim();
+  const parts = [];
+  if (dagen.length) parts.push(dagen.join(', '));
+  if (extra) parts.push(extra);
+  return parts.join('; ');
+}
+
+function laadAfwezig(afwezigStr) {
+  document.querySelectorAll('#afwezig-dagen-knoppen .dag-knop').forEach(b => b.classList.remove('actief'));
+  document.getElementById('f-afwezig-extra').value = '';
+  if (!afwezigStr) return;
+  const dagNamen = ['maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag','zondag'];
+  afwezigStr.split(/[;,]/).map(s => s.trim().toLowerCase()).filter(Boolean).forEach(deel => {
+    const gevonden = dagNamen.find(d => deel === d || deel.startsWith(d + ' '));
+    if (gevonden) {
+      const btn = document.querySelector('#afwezig-dagen-knoppen .dag-knop[data-dag="' + gevonden + '"]');
+      if (btn) btn.classList.add('actief');
+    } else if (!dagNamen.some(d => deel.startsWith(d))) {
+      const huidig = document.getElementById('f-afwezig-extra').value;
+      document.getElementById('f-afwezig-extra').value = huidig ? huidig + ', ' + deel : deel;
+    }
+  });
 }
 
 function toggleRondeUren() {
@@ -1980,6 +2111,12 @@ function optimaliseerRouteMetTijdvensters(pts, startMinuten, rondeType) {
       if (tb.niet) vroegst = Math.max(vroegst, tijdNaarMinuten(tb.niet));
       if (tb.voor) laatst = Math.min(laatst, tijdNaarMinuten(tb.voor));
     }
+    // Eenmalige afwijking overschrijft indien strenger
+    const em = p.eenmaligVandaag;
+    if (em) {
+      if (em.niet) vroegst = Math.max(vroegst, tijdNaarMinuten(em.niet));
+      if (em.voor) laatst = Math.min(laatst, tijdNaarMinuten(em.voor));
+    }
     return { ...p, vroegst, laatst };
   });
 
@@ -2220,10 +2357,7 @@ function renderLijst() {
         ${medStr}${afwStr}${pauzeStr}${overledenStr}
         <div class="detail-actions">
           <button class="btn btn-sm" onclick="bewerkPatient(${p.id})">\u270F\uFE0F Bewerken</button>
-          ${p.status !== 'overleden' ? `<button class="btn btn-sm" style="background:var(--amber-pale);color:var(--amber);border-color:var(--amber)" onclick="toonPauzeerdialoog(${p.id})">${p.status === 'actief' ? '\u23F8 Pauzeren' : '\u25B6\uFE0F Hervatten'}</button>` : ''}
-          ${p.status !== 'overleden'
-            ? `<button class="btn btn-sm" style="background:#f0f0f0;color:#555;border-color:#ccc" onclick="markeerOverleden(${p.id})">✝ Overleden</button>`
-            : `<button class="btn btn-sm" style="background:var(--green-pale);color:var(--green);border-color:var(--green-mid)" onclick="herstelVanOverleden(${p.id})">↩ Herstellen</button>`}
+          ${p.status !== 'overleden' ? '<button class="btn btn-sm" style="background:var(--amber-pale);color:var(--amber);border-color:var(--amber)" onclick="toonPauzeerdialoog(' + p.id + ')">' + (p.status === 'actief' ? '\u23F8 Pauzeren' : '\u25B6\uFE0F Hervatten') + '</button>' : '<button class="btn btn-sm" style="background:var(--green-pale);color:var(--green);border-color:var(--green-mid)" onclick="herstelVanOverleden(' + p.id + ')">\u21A9 Herstellen</button>'}
           <button class="btn btn-sm btn-danger" onclick="verwijderPatient(${p.id})">\uD83D\uDDD1</button>
         </div>
       </div>
@@ -2259,15 +2393,19 @@ function bewerkPatient(id) {
   F('duur').value = p.duur || 30;
   F('ronde').value = p.ronde || 'ochtend';
   F('zorgen').value = p.zorgen || '';
-  F('afwezig').value = p.afwezig || '';
+  laadAfwezig(p.afwezig || '');
   F('medisch').value = p.medisch || '';
   F('lat').value = p.lat || '';
   F('lon').value = p.lon || '';
   initDagSchemaForm(p.dagSchema || {});
   initTijdsSchemaForm(p.tijdsSchema || {});
   laadNietBezoek(p.nietBezoek || []);
+  laadEenmalig(p.eenmaligAfwijkingen || []);
   laadFrequentie(p.frequentie || null);
   showTab('nieuw');
+  // Verberg foto-import en install-banner bij bewerken
+  document.getElementById('foto-import-sectie').style.display = 'none';
+  document.getElementById('install-banner').style.display = 'none';
   document.getElementById('pane-nieuw').scrollTo(0, 0);
   window.scrollTo(0, 0);
 }
@@ -2299,14 +2437,18 @@ function slaPatientOp() {
     duur: parseInt(document.getElementById('f-duur').value) || 30,
     ronde: document.getElementById('f-ronde').value,
     zorgen: F('zorgen'),
-    afwezig: F('afwezig'),
+    afwezig: leesAfwezig(),
     medisch: F('medisch'),
     lat: parseFloat(F('lat')) || null,
     lon: parseFloat(F('lon')) || null,
     dagSchema: leesDagSchema(),
     tijdsSchema: leesTijdsSchema(),
     frequentie: leesFrequentie(),
-    nietBezoek: [...nietBezoekPeriodes]
+    nietBezoek: [...nietBezoekPeriodes],
+    eenmaligAfwijkingen: [...eenmaligAfwijkingen],
+    overledenDatum: document.getElementById('f-status').value === 'overleden'
+      ? (patienten.find(x => x.id === editId)?.overledenDatum || new Date().toISOString().slice(0,10))
+      : null
   };
 
   if (!editId) {
@@ -2342,13 +2484,17 @@ function genereerRondes() {
   );
 
   // Verrijk elke patiënt met dag-specifieke info
-  const verrijkt = actief.map(p => ({
-    ...p,
-    duurVandaag: duurOpDatum(p, d),
-    zorgenVandaag: zorgenOpDatum(p, d),
-    heeftDagAfwijking: !!(p.dagSchema && p.dagSchema[DAYS_SHORT[d.getDay()]] && p.dagSchema[DAYS_SHORT[d.getDay()]].actief),
-    tijdsBeperking: p.tijdsSchema && p.tijdsSchema[DAYS_SHORT[d.getDay()]] && p.tijdsSchema[DAYS_SHORT[d.getDay()]].actief ? p.tijdsSchema[DAYS_SHORT[d.getDay()]] : null
-  }));
+  const verrijkt = actief.map(p => {
+    const eenmalig = getEenmaligVoorDatum(p, d);
+    return {
+      ...p,
+      duurVandaag: duurOpDatum(p, d),
+      zorgenVandaag: zorgenOpDatum(p, d),
+      heeftDagAfwijking: !!(p.dagSchema && p.dagSchema[DAYS_SHORT[d.getDay()]] && p.dagSchema[DAYS_SHORT[d.getDay()]].actief),
+      tijdsBeperking: p.tijdsSchema && p.tijdsSchema[DAYS_SHORT[d.getDay()]] && p.tijdsSchema[DAYS_SHORT[d.getDay()]].actief ? p.tijdsSchema[DAYS_SHORT[d.getDay()]] : null,
+      eenmaligVandaag: eenmalig
+    };
+  });
 
   // Splits ochtend/avond
   const ochtendPts = verrijkt.filter(p => p.ronde === 'ochtend' || p.ronde === 'beide');
@@ -2410,6 +2556,16 @@ function genereerRondes() {
         ? ' <span style="font-size:10px;color:var(--amber);background:var(--amber-pale);padding:1px 6px;border-radius:10px">dag-schema</span>' : '';
       const medStr = p.medisch
         ? '<span class="badge b-med" style="margin-top:3px;display:inline-block">\u2695 ' + p.medisch + '</span>' : '';
+      const em = p.eenmaligVandaag;
+      const eenmaligStr = em
+        ? '<span onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'block\':\'none\'" style="cursor:pointer;font-size:13px;margin-left:4px" title="Eenmalige afwijking">⚠️</span>'
+          + '<div style="display:none;margin-top:4px;padding:6px 8px;background:var(--blue-pale);border-radius:var(--radius-sm);font-size:12px;color:var(--blue)">'
+          + (em.voor ? 'Klaar v\xf3\xf3r <strong>' + em.voor + '</strong>' : '')
+          + (em.voor && em.niet ? ' \xb7 ' : '')
+          + (em.niet ? 'Niet v\xf3\xf3r <strong>' + em.niet + '</strong>' : '')
+          + (em.reden ? '<br><span style="color:var(--text-muted)">' + em.reden + '</span>' : '')
+          + '</div>'
+        : '';
       const tb = p.tijdsBeperking;
       const tbStr = tb
         ? '<div style="font-size:11px;margin-top:3px;display:flex;gap:6px;flex-wrap:wrap">'
@@ -2432,10 +2588,10 @@ function genereerRondes() {
       <div class="stop-row">
         <div class="stop-num">${i+1}</div>
         <div style="flex:1">
-          <div class="stop-name">${p.voornaam} ${p.naam}</div>
+          <div class="stop-name">${p.voornaam} ${p.naam}${em ? ' \u26A0\uFE0F' : ''}</div>
           <div class="stop-detail">\uD83D\uDCCD ${p.adres || '\u2014'} \xb7 <strong>${p.duurVandaag} min</strong>${afwijkingStr}</div>
           <div class="stop-detail">${p.zorgenVandaag || '\u2014'}</div>
-          ${aankomstStr}${tbStr}${medStr}
+          ${eenmaligStr}${aankomstStr}${tbStr}${medStr}
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div class="stop-time">${vensterStr}</div>
