@@ -416,6 +416,7 @@ textarea { resize: vertical; min-height: 70px; }
     <div>
       <div class="header-logo">VP <span>planning</span></div>
       <div class="header-date" id="header-date"></div>
+      <div style="font-size:10px;opacity:0.4;margin-top:1px">v1.22</div>
     </div>
   </div>
 </div>
@@ -858,7 +859,7 @@ textarea { resize: vertical; min-height: 70px; }
   <div class="card">
     <div class="section-title">Versiebeheer</div>
     <div style="font-size:13px;color:var(--text-muted)">
-      VP Planning v1.2 · Data opgeslagen lokaal op dit apparaat
+      VP Planning v1.22 · Data opgeslagen lokaal op dit apparaat
     </div>
     <button class="btn btn-danger btn-sm" style="margin-top:10px" onclick="resetData()">🗑 Alle data wissen</button>
   </div>
@@ -1467,9 +1468,9 @@ function bevestigOpslaan() {
 }
 
 function voerOpslaanUit(p) {
-  const wasEdit = !!editId;
-  if (editId) {
-    patienten = patienten.map(x => x.id === editId ? p : x);
+  const wasEdit = !!(editId || patienten.find(x => x.id === p.id));
+  if (editId || patienten.find(x => x.id === p.id)) {
+    patienten = patienten.map(x => x.id === p.id ? p : x);
   } else {
     patienten.push(p);
   }
@@ -1477,23 +1478,17 @@ function voerOpslaanUit(p) {
   editId = null;
   resetFormulier();
   showTab('lijst');
-  // Korte vertraging zodat lijst gerenderd is voor we scrollen
   setTimeout(() => {
-    const el = document.getElementById('det-' + p.id);
-    if (el) {
-      el.closest('.patient-item')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-    // Toon korte bevestigingsmelding bovenaan lijst
     const bestaand = document.getElementById('lijst-save-msg');
     if (bestaand) bestaand.remove();
     const msg = document.createElement('div');
     msg.id = 'lijst-save-msg';
-    msg.style.cssText = 'background:var(--green-pale);color:var(--green);font-size:13px;padding:10px 16px;border-radius:var(--radius-sm);margin-bottom:8px;font-weight:500';
+    msg.style.cssText = 'background:var(--green-pale);color:var(--green);font-size:13px;padding:10px 16px;border-radius:var(--radius-sm);margin-bottom:8px;font-weight:500;margin:0 0 8px';
     msg.textContent = '\u2713 ' + p.voornaam + ' ' + p.naam + (wasEdit ? ' bijgewerkt' : ' toegevoegd');
     const lijstPane = document.getElementById('pane-lijst');
-    lijstPane.insertBefore(msg, lijstPane.firstChild);
-    setTimeout(() => msg.remove(), 3000);
-  }, 100);
+    if (lijstPane) lijstPane.insertBefore(msg, lijstPane.firstChild);
+    setTimeout(() => { if (msg.parentNode) msg.remove(); }, 3000);
+  }, 150);
 }
 
 function resetFormulier() {
