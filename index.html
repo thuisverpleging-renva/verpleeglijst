@@ -483,6 +483,7 @@ textarea { resize: vertical; min-height: 70px; }
       <option value="">Niet opgegeven</option>
     </select>
     <select id="sorteer" style="flex:1;min-width:120px;font-size:13px" onchange="renderLijst()">
+      <option value="recent">Recent toegevoegd</option>
       <option value="naam-az">Naam A→Z</option>
       <option value="naam-za">Naam Z→A</option>
       <option value="leeftijd-jong">Leeftijd: jong→oud</option>
@@ -2280,6 +2281,7 @@ function renderLijst() {
   const geslachtVolgorde = { 'v': 0, 'm': 1, 'x': 2, '': 3, undefined: 3 };
   gefilterd.sort((a, b) => {
     switch (sorteer) {
+      case 'recent': return (b.id || 0) - (a.id || 0);
       case 'naam-az': return (a.naam + a.voornaam).localeCompare(b.naam + b.voornaam, 'nl');
       case 'naam-za': return (b.naam + b.voornaam).localeCompare(a.naam + a.voornaam, 'nl');
       case 'leeftijd-jong': {
