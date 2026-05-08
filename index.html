@@ -595,22 +595,22 @@ textarea { resize: vertical; min-height: 70px; }
         <div class="field"><label>Van</label>
           <div class="tijd-wrap">
             <select id="f-van-u" onchange="syncTijd('f-van')">
-              ${Array.from({length:13},(_,i)=>i+5).map(u=>`<option value="${String(u).padStart(2,'0')}" ${u===7?'selected':''}>${String(u).padStart(2,'0')}</option>`).join('')}
+              <option value="05">05</option><option value="06">06</option><option value="07" selected>07</option><option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option>
             </select>
             <span class="sep">:</span>
             <select id="f-van-m" onchange="syncTijd('f-van')">
-              ${['00','10','20','30','40','50'].map(m=>`<option value="${m}">${m}</option>`).join('')}
+              <option value="00" selected>00</option><option value="10">10</option><option value="20">20</option><option value="30">30</option><option value="40">40</option><option value="50">50</option>
             </select>
           </div>
         </div>
         <div class="field"><label>Tot</label>
           <div class="tijd-wrap">
             <select id="f-tot-u" onchange="syncTijd('f-tot')">
-              ${Array.from({length:13},(_,i)=>i+5).map(u=>`<option value="${String(u).padStart(2,'0')}" ${u===9?'selected':''}>${String(u).padStart(2,'0')}</option>`).join('')}
+              <option value="05">05</option><option value="06">06</option><option value="07">07</option><option value="08">08</option><option value="09" selected>09</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option>
             </select>
             <span class="sep">:</span>
             <select id="f-tot-m" onchange="syncTijd('f-tot')">
-              ${['00','10','20','30','40','50'].map(m=>`<option value="${m}" ${m==='30'?'selected':''}>${m}</option>`).join('')}
+              <option value="00">00</option><option value="10">10</option><option value="20">20</option><option value="30" selected>30</option><option value="40">40</option><option value="50">50</option>
             </select>
           </div>
         </div>
@@ -622,22 +622,22 @@ textarea { resize: vertical; min-height: 70px; }
         <div class="field"><label>Van</label>
           <div class="tijd-wrap">
             <select id="f-van-avond-u" onchange="syncTijd('f-van-avond')">
-              ${Array.from({length:10},(_,i)=>i+14).map(u=>`<option value="${String(u).padStart(2,'0')}" ${u===17?'selected':''}>${String(u).padStart(2,'0')}</option>`).join('')}
+              <option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17" selected>17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option>
             </select>
             <span class="sep">:</span>
             <select id="f-van-avond-m" onchange="syncTijd('f-van-avond')">
-              ${['00','10','20','30','40','50'].map(m=>`<option value="${m}">${m}</option>`).join('')}
+              <option value="00" selected>00</option><option value="10">10</option><option value="20">20</option><option value="30">30</option><option value="40">40</option><option value="50">50</option>
             </select>
           </div>
         </div>
         <div class="field"><label>Tot</label>
           <div class="tijd-wrap">
             <select id="f-tot-avond-u" onchange="syncTijd('f-tot-avond')">
-              ${Array.from({length:10},(_,i)=>i+14).map(u=>`<option value="${String(u).padStart(2,'0')}" ${u===20?'selected':''}>${String(u).padStart(2,'0')}</option>`).join('')}
+              <option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20" selected>20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option>
             </select>
             <span class="sep">:</span>
             <select id="f-tot-avond-m" onchange="syncTijd('f-tot-avond')">
-              ${['00','10','20','30','40','50'].map(m=>`<option value="${m}">${m}</option>`).join('')}
+              <option value="00" selected>00</option><option value="10">10</option><option value="20">20</option><option value="30">30</option><option value="40">40</option><option value="50">50</option>
             </select>
           </div>
         </div>
@@ -1074,30 +1074,54 @@ function initTijdsSchemaForm(bestaand) {
       </label>
       <div style="display:flex;align-items:center;gap:4px">
         <span style="font-size:11px;color:var(--text-muted);white-space:nowrap">klaar v\u00f3\u00f3r</span>
-        <input type="time" step="600" id="tijds-voor-${d}" value="${vFor}" ${aan ? '' : 'disabled'} style="flex:1;font-size:12px;padding:4px 6px">
+        <input type="hidden" id="tijds-voor-${d}" value="${vFor}">
+        <div class="tijd-wrap" style="flex:1">
+          <select id="tijds-voor-${d}-u" ${aan ? '' : 'disabled'} style="flex:1;font-size:12px;padding:4px 4px" onchange="syncTijdsBeperking('${d}','voor')">
+            <option value="">--</option>
+            <option value="05" ${vFor&&vFor.startsWith('05')?'selected':''}>05</option><option value="06" ${vFor&&vFor.startsWith('06')?'selected':''}>06</option><option value="07" ${vFor&&vFor.startsWith('07')?'selected':''}>07</option><option value="08" ${vFor&&vFor.startsWith('08')?'selected':''}>08</option><option value="09" ${vFor&&vFor.startsWith('09')?'selected':''}>09</option><option value="10" ${vFor&&vFor.startsWith('10')?'selected':''}>10</option><option value="11" ${vFor&&vFor.startsWith('11')?'selected':''}>11</option><option value="12" ${vFor&&vFor.startsWith('12')?'selected':''}>12</option><option value="13" ${vFor&&vFor.startsWith('13')?'selected':''}>13</option><option value="14" ${vFor&&vFor.startsWith('14')?'selected':''}>14</option><option value="15" ${vFor&&vFor.startsWith('15')?'selected':''}>15</option><option value="16" ${vFor&&vFor.startsWith('16')?'selected':''}>16</option><option value="17" ${vFor&&vFor.startsWith('17')?'selected':''}>17</option><option value="18" ${vFor&&vFor.startsWith('18')?'selected':''}>18</option><option value="19" ${vFor&&vFor.startsWith('19')?'selected':''}>19</option><option value="20" ${vFor&&vFor.startsWith('20')?'selected':''}>20</option>
+          </select>
+          <span class="sep">:</span>
+          <select id="tijds-voor-${d}-m" ${aan ? '' : 'disabled'} style="flex:1;font-size:12px;padding:4px 4px" onchange="syncTijdsBeperking('${d}','voor')">
+            <option value="00" ${vFor&&vFor.endsWith(':00')?'selected':''}>00</option><option value="10" ${vFor&&vFor.endsWith(':10')?'selected':''}>10</option><option value="20" ${vFor&&vFor.endsWith(':20')?'selected':''}>20</option><option value="30" ${vFor&&vFor.endsWith(':30')?'selected':''}>30</option><option value="40" ${vFor&&vFor.endsWith(':40')?'selected':''}>40</option><option value="50" ${vFor&&vFor.endsWith(':50')?'selected':''}>50</option>
+          </select>
+        </div>
       </div>
       <div style="display:flex;align-items:center;gap:4px">
         <span style="font-size:11px;color:var(--text-muted);white-space:nowrap">niet v\u00f3\u00f3r</span>
-        <input type="time" step="600" id="tijds-niet-${d}" value="${vNiet}" ${aan ? '' : 'disabled'} style="flex:1;font-size:12px;padding:4px 6px">
+        <input type="hidden" id="tijds-niet-${d}" value="${vNiet}">
+        <div class="tijd-wrap" style="flex:1">
+          <select id="tijds-niet-${d}-u" ${aan ? '' : 'disabled'} style="flex:1;font-size:12px;padding:4px 4px" onchange="syncTijdsBeperking('${d}','niet')">
+            <option value="">--</option>
+            <option value="05" ${vNiet&&vNiet.startsWith('05')?'selected':''}>05</option><option value="06" ${vNiet&&vNiet.startsWith('06')?'selected':''}>06</option><option value="07" ${vNiet&&vNiet.startsWith('07')?'selected':''}>07</option><option value="08" ${vNiet&&vNiet.startsWith('08')?'selected':''}>08</option><option value="09" ${vNiet&&vNiet.startsWith('09')?'selected':''}>09</option><option value="10" ${vNiet&&vNiet.startsWith('10')?'selected':''}>10</option><option value="11" ${vNiet&&vNiet.startsWith('11')?'selected':''}>11</option><option value="12" ${vNiet&&vNiet.startsWith('12')?'selected':''}>12</option><option value="13" ${vNiet&&vNiet.startsWith('13')?'selected':''}>13</option><option value="14" ${vNiet&&vNiet.startsWith('14')?'selected':''}>14</option><option value="15" ${vNiet&&vNiet.startsWith('15')?'selected':''}>15</option><option value="16" ${vNiet&&vNiet.startsWith('16')?'selected':''}>16</option><option value="17" ${vNiet&&vNiet.startsWith('17')?'selected':''}>17</option><option value="18" ${vNiet&&vNiet.startsWith('18')?'selected':''}>18</option><option value="19" ${vNiet&&vNiet.startsWith('19')?'selected':''}>19</option><option value="20" ${vNiet&&vNiet.startsWith('20')?'selected':''}>20</option>
+          </select>
+          <span class="sep">:</span>
+          <select id="tijds-niet-${d}-m" ${aan ? '' : 'disabled'} style="flex:1;font-size:12px;padding:4px 4px" onchange="syncTijdsBeperking('${d}','niet')">
+            <option value="00" ${vNiet&&vNiet.endsWith(':00')?'selected':''}>00</option><option value="10" ${vNiet&&vNiet.endsWith(':10')?'selected':''}>10</option><option value="20" ${vNiet&&vNiet.endsWith(':20')?'selected':''}>20</option><option value="30" ${vNiet&&vNiet.endsWith(':30')?'selected':''}>30</option><option value="40" ${vNiet&&vNiet.endsWith(':40')?'selected':''}>40</option><option value="50" ${vNiet&&vNiet.endsWith(':50')?'selected':''}>50</option>
+          </select>
+        </div>
       </div>
     </div>`;
   }).join('');
 }
 
+function syncTijdsBeperking(d, type) {
+  const u = document.getElementById('tijds-' + type + '-' + d + '-u')?.value;
+  const m = document.getElementById('tijds-' + type + '-' + d + '-m')?.value;
+  const hidden = document.getElementById('tijds-' + type + '-' + d);
+  if (hidden) hidden.value = (u && u !== '--') ? u + ':' + (m || '00') : '';
+}
+
 function toggleTijdsRij(d) {
   const cb = document.getElementById('tijds-cb-' + d);
   const rij = document.getElementById('tijdsr-' + d);
-  const voorEl = document.getElementById('tijds-voor-' + d);
-  const nietEl = document.getElementById('tijds-niet-' + d);
-  if (cb.checked) {
-    rij.classList.add('actief');
-    voorEl.disabled = false;
-    nietEl.disabled = false;
-  } else {
-    rij.classList.remove('actief');
-    voorEl.disabled = true;
-    nietEl.disabled = true;
-  }
+  const enabled = cb.checked;
+  rij.classList.toggle('actief', enabled);
+  ['voor', 'niet'].forEach(type => {
+    ['u','m'].forEach(part => {
+      const el = document.getElementById('tijds-' + type + '-' + d + '-' + part);
+      if (el) el.disabled = !enabled;
+    });
+  });
 }
 
 function leesTijdsSchema() {
@@ -1105,10 +1129,12 @@ function leesTijdsSchema() {
   DAYS_SHORT.forEach(d => {
     const cb = document.getElementById('tijds-cb-' + d);
     if (cb && cb.checked) {
+      syncTijdsBeperking(d, 'voor');
+      syncTijdsBeperking(d, 'niet');
       schema[d] = {
         actief: true,
-        voor: document.getElementById('tijds-voor-' + d).value || null,
-        niet: document.getElementById('tijds-niet-' + d).value || null
+        voor: document.getElementById('tijds-voor-' + d)?.value || null,
+        niet: document.getElementById('tijds-niet-' + d)?.value || null
       };
     }
   });
@@ -1615,10 +1641,26 @@ function renderDagbezoekLijst() {
           </select>
         </div>
         <div class="field"><label>Van</label>
-          <input type="time" step="600" value="${b.van||''}" style="font-size:12px;padding:5px 6px" onchange="updateDagbezoek(${i},'van',this.value)">
+          <div class="tijd-wrap">
+            <select style="font-size:12px;padding:4px 4px" onchange="updateDagbezoekTijd(${i},'van',this)">
+              <option value="05" ${(b.van||'').startsWith('05')?'selected':''}>05</option><option value="06" ${(b.van||'').startsWith('06')?'selected':''}>06</option><option value="07" ${(b.van||'07').startsWith('07')?'selected':''}>07</option><option value="08" ${(b.van||'').startsWith('08')?'selected':''}>08</option><option value="09" ${(b.van||'').startsWith('09')?'selected':''}>09</option><option value="10" ${(b.van||'').startsWith('10')?'selected':''}>10</option><option value="11" ${(b.van||'').startsWith('11')?'selected':''}>11</option><option value="12" ${(b.van||'').startsWith('12')?'selected':''}>12</option><option value="13" ${(b.van||'').startsWith('13')?'selected':''}>13</option><option value="14" ${(b.van||'').startsWith('14')?'selected':''}>14</option><option value="15" ${(b.van||'').startsWith('15')?'selected':''}>15</option><option value="16" ${(b.van||'').startsWith('16')?'selected':''}>16</option><option value="17" ${(b.ronde==='avond'&&!(b.van)).toString()==='true'||( b.van||'').startsWith('17')?'selected':''}>17</option><option value="18" ${(b.van||'').startsWith('18')?'selected':''}>18</option><option value="19" ${(b.van||'').startsWith('19')?'selected':''}>19</option><option value="20" ${(b.van||'').startsWith('20')?'selected':''}>20</option>
+            </select>
+            <span class="sep">:</span>
+            <select style="font-size:12px;padding:4px 4px" onchange="updateDagbezoekTijd(${i},'van-m',this)" data-idx="${i}" data-field="van">
+              <option value="00" ${!(b.van)||b.van.endsWith(':00')?'selected':''}>00</option><option value="10" ${(b.van||'').endsWith(':10')?'selected':''}>10</option><option value="20" ${(b.van||'').endsWith(':20')?'selected':''}>20</option><option value="30" ${(b.van||'').endsWith(':30')?'selected':''}>30</option><option value="40" ${(b.van||'').endsWith(':40')?'selected':''}>40</option><option value="50" ${(b.van||'').endsWith(':50')?'selected':''}>50</option>
+            </select>
+          </div>
         </div>
         <div class="field"><label>Tot</label>
-          <input type="time" step="600" value="${b.tot||''}" style="font-size:12px;padding:5px 6px" onchange="updateDagbezoek(${i},'tot',this.value)">
+          <div class="tijd-wrap">
+            <select style="font-size:12px;padding:4px 4px" onchange="updateDagbezoekTijd(${i},'tot',this)">
+              <option value="05" ${(b.tot||'').startsWith('05')?'selected':''}>05</option><option value="06" ${(b.tot||'').startsWith('06')?'selected':''}>06</option><option value="07" ${(b.tot||'').startsWith('07')?'selected':''}>07</option><option value="08" ${(b.tot||'').startsWith('08')?'selected':''}>08</option><option value="09" ${(b.tot||'09').startsWith('09')?'selected':''}>09</option><option value="10" ${(b.tot||'').startsWith('10')?'selected':''}>10</option><option value="11" ${(b.tot||'').startsWith('11')?'selected':''}>11</option><option value="12" ${(b.tot||'').startsWith('12')?'selected':''}>12</option><option value="13" ${(b.tot||'').startsWith('13')?'selected':''}>13</option><option value="14" ${(b.tot||'').startsWith('14')?'selected':''}>14</option><option value="15" ${(b.tot||'').startsWith('15')?'selected':''}>15</option><option value="16" ${(b.tot||'').startsWith('16')?'selected':''}>16</option><option value="17" ${(b.tot||'').startsWith('17')?'selected':''}>17</option><option value="18" ${(b.tot||'').startsWith('18')?'selected':''}>18</option><option value="19" ${(b.tot||'').startsWith('19')?'selected':''}>19</option><option value="20" ${(b.tot||'').startsWith('20')?'selected':''}>20</option>
+            </select>
+            <span class="sep">:</span>
+            <select style="font-size:12px;padding:4px 4px" onchange="updateDagbezoekTijd(${i},'tot-m',this)">
+              <option value="00" ${!(b.tot)||b.tot.endsWith(':00')?'selected':''}>00</option><option value="10" ${(b.tot||'').endsWith(':10')?'selected':''}>10</option><option value="20" ${(b.tot||'').endsWith(':20')?'selected':''}>20</option><option value="30" ${(b.tot||'09:30').endsWith(':30')?'selected':''}>30</option><option value="40" ${(b.tot||'').endsWith(':40')?'selected':''}>40</option><option value="50" ${(b.tot||'').endsWith(':50')?'selected':''}>50</option>
+            </select>
+          </div>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:60px 1fr;gap:6px">
@@ -1655,6 +1697,23 @@ function updateDagbezoek(idx, veld, waarde) {
   const dag = huidigeDagbezoekDag;
   if (!dag || !dagBezoekSchema[dag] || !dagBezoekSchema[dag][idx]) return;
   dagBezoekSchema[dag][idx][veld] = waarde;
+}
+
+function updateDagbezoekTijd(idx, veld, selectEl) {
+  // veld is 'van', 'van-m', 'tot', 'tot-m'
+  const dag = huidigeDagbezoekDag;
+  if (!dag || !dagBezoekSchema[dag] || !dagBezoekSchema[dag][idx]) return;
+  const b = dagBezoekSchema[dag][idx];
+  const rij = selectEl.closest('[style*="grid"]');
+  if (veld === 'van' || veld === 'van-m') {
+    const uSel = rij?.querySelectorAll('select')[0];
+    const mSel = rij?.querySelectorAll('select')[1];
+    if (uSel && mSel) b.van = uSel.value + ':' + mSel.value;
+  } else {
+    const uSel = rij?.querySelectorAll('select')[0];
+    const mSel = rij?.querySelectorAll('select')[1];
+    if (uSel && mSel) b.tot = uSel.value + ':' + mSel.value;
+  }
 }
 
 function verwijderDagbezoek(idx) {
@@ -1744,8 +1803,30 @@ function voegEenmaligToe() {
         <div class="field"><label>Reden (optioneel)</label><input type="text" id="em-reden-${tempId}" placeholder="bv. doktersafspraak"></div>
       </div>
       <div class="form-grid">
-        <div class="field"><label>Klaar vóór (optioneel)</label><input type="time" step="600" id="em-voor-${tempId}"></div>
-        <div class="field"><label>Niet vóór (optioneel)</label><input type="time" step="600" id="em-niet-${tempId}"></div>
+        <div class="field"><label>Klaar v\u00f3\u00f3r (optioneel)</label>
+          <div class="tijd-wrap">
+            <select id="em-voor-${tempId}-u" style="font-size:13px">
+              <option value="">--</option>
+              <option value="05">05</option><option value="06">06</option><option value="07">07</option><option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option>
+            </select>
+            <span class="sep">:</span>
+            <select id="em-voor-${tempId}-m" style="font-size:13px">
+              <option value="00">00</option><option value="10">10</option><option value="20">20</option><option value="30">30</option><option value="40">40</option><option value="50">50</option>
+            </select>
+          </div>
+        </div>
+        <div class="field"><label>Niet v\u00f3\u00f3r (optioneel)</label>
+          <div class="tijd-wrap">
+            <select id="em-niet-${tempId}-u" style="font-size:13px">
+              <option value="">--</option>
+              <option value="05">05</option><option value="06">06</option><option value="07">07</option><option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option>
+            </select>
+            <span class="sep">:</span>
+            <select id="em-niet-${tempId}-m" style="font-size:13px">
+              <option value="00">00</option><option value="10">10</option><option value="20">20</option><option value="30">30</option><option value="40">40</option><option value="50">50</option>
+            </select>
+          </div>
+        </div>
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button type="button" class="btn btn-sm" onclick="document.getElementById('${tempId}').remove()">Annuleren</button>
@@ -1757,8 +1838,12 @@ function voegEenmaligToe() {
 function bevestigEenmalig(tempId) {
   const datum = document.getElementById('em-datum-' + tempId).value;
   if (!datum) { alert('Vul een datum in.'); return; }
-  const voor = document.getElementById('em-voor-' + tempId).value;
-  const niet = document.getElementById('em-niet-' + tempId).value;
+  const voorU = document.getElementById('em-voor-' + tempId + '-u')?.value;
+  const voorM = document.getElementById('em-voor-' + tempId + '-m')?.value || '00';
+  const nietU = document.getElementById('em-niet-' + tempId + '-u')?.value;
+  const nietM = document.getElementById('em-niet-' + tempId + '-m')?.value || '00';
+  const voor = voorU && voorU !== '--' ? voorU + ':' + voorM : null;
+  const niet = nietU && nietU !== '--' ? nietU + ':' + nietM : null;
   const reden = document.getElementById('em-reden-' + tempId).value;
   if (!voor && !niet) { alert('Vul minstens een "klaar vóór" of "niet vóór" tijd in.'); return; }
   eenmaligAfwijkingen.push({ datum, voor: voor || null, niet: niet || null, reden: reden || null });
