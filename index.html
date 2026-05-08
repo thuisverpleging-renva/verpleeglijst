@@ -1552,44 +1552,60 @@ function voerOpslaanUit(p) {
   }
   saveData();
   editId = null;
-  resetFormulier();
-  showTab('lijst');
+
+  // Direct naar patiëntenlijst navigeren — zonder afhankelijkheid van showTab
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  const lijstPane = document.getElementById('pane-lijst');
+  const lijstTab = document.getElementById('tab-lijst');
+  if (lijstPane) lijstPane.classList.add('active');
+  if (lijstTab) lijstTab.classList.add('active');
+  window.scrollTo(0, 0);
+  renderLijst();
+
+  try { resetFormulier(); } catch(e) { console.warn('Reset fout:', e); }
   setTimeout(() => {
-    const bestaand = document.getElementById('lijst-save-msg');
-    if (bestaand) bestaand.remove();
-    const msg = document.createElement('div');
-    msg.id = 'lijst-save-msg';
-    msg.style.cssText = 'background:var(--green-pale);color:var(--green);font-size:13px;padding:10px 16px;border-radius:var(--radius-sm);margin-bottom:8px;font-weight:500;margin:0 0 8px';
-    msg.textContent = '\u2713 ' + p.voornaam + ' ' + p.naam + (wasEdit ? ' bijgewerkt' : ' toegevoegd');
-    const lijstPane = document.getElementById('pane-lijst');
-    if (lijstPane) lijstPane.insertBefore(msg, lijstPane.firstChild);
-    setTimeout(() => { if (msg.parentNode) msg.remove(); }, 3000);
+    try {
+      const bestaand = document.getElementById('lijst-save-msg');
+      if (bestaand) bestaand.remove();
+      const msg = document.createElement('div');
+      msg.id = 'lijst-save-msg';
+      msg.style.cssText = 'background:var(--green-pale);color:var(--green);font-size:13px;padding:10px 16px;border-radius:var(--radius-sm);margin-bottom:8px;font-weight:500';
+      msg.textContent = '\u2713 ' + p.voornaam + ' ' + p.naam + (wasEdit ? ' bijgewerkt' : ' toegevoegd');
+      const lijstPane = document.getElementById('pane-lijst');
+      if (lijstPane) lijstPane.insertBefore(msg, lijstPane.firstChild);
+      setTimeout(() => { try { msg.remove(); } catch(e) {} }, 3000);
+    } catch(e) { console.warn('Bevestiging fout:', e); }
   }, 150);
 }
 
 function resetFormulier() {
-  ['voornaam','naam','adres','geb','tel','zorgen','afwezig','medisch','lat','lon'].forEach(f => {
-    document.getElementById('f-' + f).value = '';
+  ['voornaam','naam','adres','geb','tel','zorgen','afwezig-extra','medisch','lat','lon'].forEach(f => {
+    const el = document.getElementById('f-' + f);
+    if (el) el.value = '';
   });
-  document.getElementById('f-duur').value = '30';
-  setTijdWaarde('f-van', '07:00');
-  setTijdWaarde('f-tot', '09:30');
-  setTijdWaarde('f-van-avond', '17:00');
-  setTijdWaarde('f-tot-avond', '20:00');
-  document.getElementById('f-status').value = 'actief';
-  document.getElementById('f-ronde').value = 'ochtend';
-  toggleRondeUren();
-  initDagSchemaForm({});
-  initTijdsSchemaForm({});
-  laadNietBezoek([]);
-  laadEenmalig([]);
-  laadDagBezoekSchema({});
-  laadAfwezig('');
-  laadFrequentie(null);
+  const duur = document.getElementById('f-duur');
+  if (duur) duur.value = '30';
+  try { setTijdWaarde('f-van', '07:00'); } catch(e) {}
+  try { setTijdWaarde('f-tot', '09:30'); } catch(e) {}
+  try { setTijdWaarde('f-van-avond', '17:00'); } catch(e) {}
+  try { setTijdWaarde('f-tot-avond', '20:00'); } catch(e) {}
+  const status = document.getElementById('f-status');
+  if (status) status.value = 'actief';
+  const ronde = document.getElementById('f-ronde');
+  if (ronde) ronde.value = 'ochtend';
+  try { toggleRondeUren(); } catch(e) {}
+  try { initDagSchemaForm({}); } catch(e) {}
+  try { initTijdsSchemaForm({}); } catch(e) {}
+  try { laadNietBezoek([]); } catch(e) {}
+  try { laadEenmalig([]); } catch(e) {}
+  try { laadDagBezoekSchema({}); } catch(e) {}
+  try { laadAfwezig(''); } catch(e) {}
+  try { laadFrequentie(null); } catch(e) {}
   altStappen = [];
-  renderAltStappen();
-  // Toon foto-import terug bij nieuw formulier
-  document.getElementById('foto-import-sectie').style.display = 'block';
+  try { renderAltStappen(); } catch(e) {}
+  const fotoSectie = document.getElementById('foto-import-sectie');
+  if (fotoSectie) fotoSectie.style.display = 'block';
 }
 
 // ── DAGBEZOEK SCHEMA (meerdere bezoeken per dag) ─────────────────
