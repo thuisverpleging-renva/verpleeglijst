@@ -1,4 +1,4 @@
-const CACHE = 'vp-planning-v22';
+const CACHE = 'vp-planning-v24';
 const ASSETS = ['/', '/index.html'];
 
 self.addEventListener('install', e => {
