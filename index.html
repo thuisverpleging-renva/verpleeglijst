@@ -581,21 +581,40 @@ textarea { resize: vertical; min-height: 70px; }
     <div id="uren-ochtend" style="background:var(--cream);border-radius:var(--radius-sm);padding:10px;margin-bottom:8px">
       <div style="font-size:11px;font-weight:500;color:var(--text-muted);margin-bottom:6px">☀️ Ochtend — gewenste uren</div>
       <div class="form-grid">
-        <div class="field"><label>Van</label><input type="time" id="f-van" value="07:00"></div>
-        <div class="field"><label>Tot</label><input type="time" id="f-tot" value="09:30"></div>
+        <div class="field"><label>Van</label><input type="time" step="600" id="f-van" value="07:00"></div>
+        <div class="field"><label>Tot</label><input type="time" step="600" id="f-tot" value="09:30"></div>
       </div>
     </div>
     <div id="uren-avond" style="background:var(--cream);border-radius:var(--radius-sm);padding:10px;margin-bottom:8px;display:none">
       <div style="font-size:11px;font-weight:500;color:var(--text-muted);margin-bottom:6px">🌙 Avond — gewenste uren</div>
       <div class="form-grid">
-        <div class="field"><label>Van</label><input type="time" id="f-van-avond" value="17:00"></div>
-        <div class="field"><label>Tot</label><input type="time" id="f-tot-avond" value="20:00"></div>
+        <div class="field"><label>Van</label><input type="time" step="600" id="f-van-avond" value="17:00"></div>
+        <div class="field"><label>Tot</label><input type="time" step="600" id="f-tot-avond" value="20:00"></div>
       </div>
     </div>
     <div class="field" style="margin-top:4px">
       <label>Standaard verpleegkundige zorgen</label>
       <textarea id="f-zorgen" placeholder="bv. wondverzorging, bloeddruk meten, injectie insuline, stoma…"></textarea>
     </div>
+  </div>
+  <div class="card">
+    <div class="section-title">Meerdere bezoeken per dag <span style="font-weight:300;font-size:10px;color:var(--text-muted)">(optioneel — bv. 4x/dag bij diabetes)</span></div>
+    <p class="schema-hint" style="margin-bottom:10px">Stel per weekdag in hoeveel bezoeken er zijn en wanneer. Elk bezoek heeft zijn eigen tijdvenster, zorgen en duur. Laat leeg voor dagen met standaard 1 bezoek.</p>
+    <div id="dagbezoek-tabs" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">
+      <button type="button" class="dag-knop" data-dag="zo" onclick="selectDagbezoek(this,'zo')">Zo</button>
+      <button type="button" class="dag-knop" data-dag="ma" onclick="selectDagbezoek(this,'ma')">Ma</button>
+      <button type="button" class="dag-knop" data-dag="di" onclick="selectDagbezoek(this,'di')">Di</button>
+      <button type="button" class="dag-knop" data-dag="wo" onclick="selectDagbezoek(this,'wo')">Wo</button>
+      <button type="button" class="dag-knop" data-dag="do" onclick="selectDagbezoek(this,'do')">Do</button>
+      <button type="button" class="dag-knop" data-dag="vr" onclick="selectDagbezoek(this,'vr')">Vr</button>
+      <button type="button" class="dag-knop" data-dag="za" onclick="selectDagbezoek(this,'za')">Za</button>
+    </div>
+    <div id="dagbezoek-editor" style="display:none;flex-direction:column;gap:8px">
+      <div id="dagbezoek-bezoeken-lijst" style="display:flex;flex-direction:column;gap:6px"></div>
+      <button type="button" class="btn btn-sm btn-outline" onclick="voegDagbezoekToe()">+ Bezoek toevoegen voor deze dag</button>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Bezoeken zonder instellingen gebruiken de standaard waarden hierboven.</div>
+    </div>
+    <div id="dagbezoek-geen" style="font-size:12px;color:var(--text-muted)">Selecteer een dag om bezoeken in te stellen.</div>
   </div>
   <div class="card">
     <div class="section-title">Verzorgingsfrequentie <span style="font-weight:300;font-size:10px;color:var(--text-muted)">— op welke dagen komt de patiënt aan de beurt?</span></div>
@@ -1004,11 +1023,11 @@ function initTijdsSchemaForm(bestaand) {
       </label>
       <div style="display:flex;align-items:center;gap:4px">
         <span style="font-size:11px;color:var(--text-muted);white-space:nowrap">klaar v\u00f3\u00f3r</span>
-        <input type="time" id="tijds-voor-${d}" value="${vFor}" ${aan ? '' : 'disabled'} style="flex:1;font-size:12px;padding:4px 6px">
+        <input type="time" step="600" id="tijds-voor-${d}" value="${vFor}" ${aan ? '' : 'disabled'} style="flex:1;font-size:12px;padding:4px 6px">
       </div>
       <div style="display:flex;align-items:center;gap:4px">
         <span style="font-size:11px;color:var(--text-muted);white-space:nowrap">niet v\u00f3\u00f3r</span>
-        <input type="time" id="tijds-niet-${d}" value="${vNiet}" ${aan ? '' : 'disabled'} style="flex:1;font-size:12px;padding:4px 6px">
+        <input type="time" step="600" id="tijds-niet-${d}" value="${vNiet}" ${aan ? '' : 'disabled'} style="flex:1;font-size:12px;padding:4px 6px">
       </div>
     </div>`;
   }).join('');
@@ -1448,6 +1467,7 @@ function bevestigOpslaan() {
 }
 
 function voerOpslaanUit(p) {
+  const wasEdit = !!editId;
   if (editId) {
     patienten = patienten.map(x => x.id === editId ? p : x);
   } else {
@@ -1456,11 +1476,24 @@ function voerOpslaanUit(p) {
   saveData();
   editId = null;
   resetFormulier();
-  const msg = document.getElementById('save-ok');
-  msg.textContent = '\u2713 ' + p.voornaam + ' ' + p.naam + ' opgeslagen';
-  msg.style.display = 'block';
-  setTimeout(() => msg.style.display = 'none', 3000);
   showTab('lijst');
+  // Korte vertraging zodat lijst gerenderd is voor we scrollen
+  setTimeout(() => {
+    const el = document.getElementById('det-' + p.id);
+    if (el) {
+      el.closest('.patient-item')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    // Toon korte bevestigingsmelding bovenaan lijst
+    const bestaand = document.getElementById('lijst-save-msg');
+    if (bestaand) bestaand.remove();
+    const msg = document.createElement('div');
+    msg.id = 'lijst-save-msg';
+    msg.style.cssText = 'background:var(--green-pale);color:var(--green);font-size:13px;padding:10px 16px;border-radius:var(--radius-sm);margin-bottom:8px;font-weight:500';
+    msg.textContent = '\u2713 ' + p.voornaam + ' ' + p.naam + (wasEdit ? ' bijgewerkt' : ' toegevoegd');
+    const lijstPane = document.getElementById('pane-lijst');
+    lijstPane.insertBefore(msg, lijstPane.firstChild);
+    setTimeout(() => msg.remove(), 3000);
+  }, 100);
 }
 
 function resetFormulier() {
@@ -1479,6 +1512,7 @@ function resetFormulier() {
   initTijdsSchemaForm({});
   laadNietBezoek([]);
   laadEenmalig([]);
+  laadDagBezoekSchema({});
   laadAfwezig('');
   laadFrequentie(null);
   altStappen = [];
@@ -1487,7 +1521,151 @@ function resetFormulier() {
   document.getElementById('foto-import-sectie').style.display = 'block';
 }
 
-// ── EENMALIGE TIJDSAFWIJKING ──────────────────────────────────────
+// ── DAGBEZOEK SCHEMA (meerdere bezoeken per dag) ─────────────────
+// dagBezoekSchema = { ma: [{van,tot,duur,ronde,zorgen}, ...], vr: [...], ... }
+let dagBezoekSchema = {};
+let huidigeDagbezoekDag = null;
+const RONDE_LABELS = { ochtend: '☀️ Ochtend', middag: '🌤 Middag', avond: '🌙 Avond' };
+
+function selectDagbezoek(btn, dag) {
+  document.querySelectorAll('#dagbezoek-tabs .dag-knop').forEach(b => b.classList.remove('actief'));
+  btn.classList.add('actief');
+  huidigeDagbezoekDag = dag;
+  document.getElementById('dagbezoek-editor').style.display = 'flex';
+  document.getElementById('dagbezoek-geen').style.display = 'none';
+  renderDagbezoekLijst();
+}
+
+function renderDagbezoekLijst() {
+  const dag = huidigeDagbezoekDag;
+  const el = document.getElementById('dagbezoek-bezoeken-lijst');
+  const bezoeken = dagBezoekSchema[dag] || [];
+  // Update dagknop badge
+  document.querySelectorAll('#dagbezoek-tabs .dag-knop').forEach(b => {
+    const d = b.dataset.dag;
+    const n = (dagBezoekSchema[d] || []).length;
+    b.textContent = ['Zo','Ma','Di','Wo','Do','Vr','Za'][['zo','ma','di','wo','do','vr','za'].indexOf(d)];
+    if (n > 0) {
+      b.classList.add('actief');
+      b.style.position = 'relative';
+      b.innerHTML = b.textContent + ' <span style="font-size:9px;background:var(--green);color:white;border-radius:10px;padding:0 4px;vertical-align:top">' + n + '</span>';
+    }
+  });
+  if (!bezoeken.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">Geen extra bezoeken — patiënt wordt 1x bezocht (standaard)</div>';
+    return;
+  }
+  el.innerHTML = bezoeken.map((b, i) => `
+    <div style="background:var(--cream);border-radius:var(--radius-sm);padding:10px;border:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+        <div style="font-size:13px;font-weight:500;flex:1">Bezoek ${i+1}</div>
+        <button type="button" class="btn btn-sm btn-danger" style="padding:3px 8px" onclick="verwijderDagbezoek(${i})">✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">
+        <div class="field"><label>Ronde</label>
+          <select style="font-size:12px;padding:5px 6px" onchange="updateDagbezoek(${i},'ronde',this.value)">
+            <option value="ochtend" ${b.ronde==='ochtend'?'selected':''}>☀️ Ochtend</option>
+            <option value="middag" ${b.ronde==='middag'?'selected':''}>🌤 Middag</option>
+            <option value="avond" ${b.ronde==='avond'?'selected':''}>🌙 Avond</option>
+          </select>
+        </div>
+        <div class="field"><label>Van</label>
+          <input type="time" step="600" value="${b.van||''}" style="font-size:12px;padding:5px 6px" onchange="updateDagbezoek(${i},'van',this.value)">
+        </div>
+        <div class="field"><label>Tot</label>
+          <input type="time" step="600" value="${b.tot||''}" style="font-size:12px;padding:5px 6px" onchange="updateDagbezoek(${i},'tot',this.value)">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:60px 1fr;gap:6px">
+        <div class="field"><label>Min</label>
+          <input type="number" min="5" max="180" value="${b.duur||30}" style="font-size:12px;padding:5px 6px" onchange="updateDagbezoek(${i},'duur',parseInt(this.value)||30)">
+        </div>
+        <div class="field"><label>Zorgen</label>
+          <input type="text" value="${b.zorgen||''}" placeholder="laat leeg = standaard" style="font-size:12px;padding:5px 6px" onchange="updateDagbezoek(${i},'zorgen',this.value)">
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function voegDagbezoekToe() {
+  const dag = huidigeDagbezoekDag;
+  if (!dag) return;
+  if (!dagBezoekSchema[dag]) dagBezoekSchema[dag] = [];
+  // Slim standaard ronde op basis van hoeveel er al zijn
+  const n = dagBezoekSchema[dag].length;
+  const rondeVolgorde = ['ochtend', 'middag', 'avond', 'ochtend'];
+  const vanVolgorde = ['07:00', '12:00', '17:00', '08:00'];
+  const totVolgorde = ['09:30', '14:00', '20:00', '10:00'];
+  dagBezoekSchema[dag].push({
+    ronde: rondeVolgorde[n] || 'ochtend',
+    van: vanVolgorde[n] || '07:00',
+    tot: totVolgorde[n] || '09:30',
+    duur: 30,
+    zorgen: ''
+  });
+  renderDagbezoekLijst();
+}
+
+function updateDagbezoek(idx, veld, waarde) {
+  const dag = huidigeDagbezoekDag;
+  if (!dag || !dagBezoekSchema[dag] || !dagBezoekSchema[dag][idx]) return;
+  dagBezoekSchema[dag][idx][veld] = waarde;
+}
+
+function verwijderDagbezoek(idx) {
+  const dag = huidigeDagbezoekDag;
+  if (!dag) return;
+  dagBezoekSchema[dag].splice(idx, 1);
+  if (!dagBezoekSchema[dag].length) delete dagBezoekSchema[dag];
+  renderDagbezoekLijst();
+}
+
+function laadDagBezoekSchema(schema) {
+  dagBezoekSchema = schema ? JSON.parse(JSON.stringify(schema)) : {};
+  huidigeDagbezoekDag = null;
+  document.querySelectorAll('#dagbezoek-tabs .dag-knop').forEach(b => {
+    b.classList.remove('actief');
+    const dag = b.dataset.dag;
+    const n = (dagBezoekSchema[dag] || []).length;
+    b.innerHTML = ['Zo','Ma','Di','Wo','Do','Vr','Za'][['zo','ma','di','wo','do','vr','za'].indexOf(dag)];
+    if (n > 0) {
+      b.innerHTML += ' <span style="font-size:9px;background:var(--green);color:white;border-radius:10px;padding:0 4px;vertical-align:top">' + n + '</span>';
+    }
+  });
+  document.getElementById('dagbezoek-editor').style.display = 'none';
+  document.getElementById('dagbezoek-geen').style.display = 'block';
+}
+
+// Haal alle bezoeken op voor een patiënt op een specifieke datum
+// Geeft array van bezoekobjecten terug, elk met ronde, van, tot, duur, zorgen
+function getBezoeken(p, datum) {
+  const dag = DAYS_SHORT[datum.getDay()];
+  const schema = p.dagBezoekSchema;
+
+  // Als er een dagbezoekschema is voor deze dag → gebruik die bezoeken
+  if (schema && schema[dag] && schema[dag].length > 0) {
+    return schema[dag].map((b, i) => ({
+      bezoekIdx: i,
+      ronde: b.ronde || p.ronde || 'ochtend',
+      van: b.van || (b.ronde === 'avond' ? p.vanAvond || '17:00' : p.van || '07:00'),
+      tot: b.tot || (b.ronde === 'avond' ? p.totAvond || '20:00' : p.tot || '09:30'),
+      duur: b.duur || p.duur || 30,
+      zorgen: b.zorgen || p.zorgen || '',
+      label: 'Bezoek ' + (i+1) + ' — ' + (RONDE_LABELS[b.ronde] || b.ronde)
+    }));
+  }
+
+  // Standaard: 1 bezoek (of 2 als ronde = 'beide')
+  if (p.ronde === 'beide') {
+    return [
+      { bezoekIdx: 0, ronde: 'ochtend', van: p.van || '07:00', tot: p.tot || '09:30', duur: p.duur || 30, zorgen: p.zorgen || '', label: '' },
+      { bezoekIdx: 1, ronde: 'avond', van: p.vanAvond || '17:00', tot: p.totAvond || '20:00', duur: p.duur || 30, zorgen: p.zorgen || '', label: '' }
+    ];
+  }
+  return [
+    { bezoekIdx: 0, ronde: p.ronde || 'ochtend', van: p.van || '07:00', tot: p.tot || '09:30', duur: p.duur || 30, zorgen: p.zorgen || '', label: '' }
+  ];
+}
 let eenmaligAfwijkingen = [];
 
 function renderEenmaligLijst() {
@@ -1521,8 +1699,8 @@ function voegEenmaligToe() {
         <div class="field"><label>Reden (optioneel)</label><input type="text" id="em-reden-${tempId}" placeholder="bv. doktersafspraak"></div>
       </div>
       <div class="form-grid">
-        <div class="field"><label>Klaar vóór (optioneel)</label><input type="time" id="em-voor-${tempId}"></div>
-        <div class="field"><label>Niet vóór (optioneel)</label><input type="time" id="em-niet-${tempId}"></div>
+        <div class="field"><label>Klaar vóór (optioneel)</label><input type="time" step="600" id="em-voor-${tempId}"></div>
+        <div class="field"><label>Niet vóór (optioneel)</label><input type="time" step="600" id="em-niet-${tempId}"></div>
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button type="button" class="btn btn-sm" onclick="document.getElementById('${tempId}').remove()">Annuleren</button>
@@ -2403,6 +2581,7 @@ function bewerkPatient(id) {
   initTijdsSchemaForm(p.tijdsSchema || {});
   laadNietBezoek(p.nietBezoek || []);
   laadEenmalig(p.eenmaligAfwijkingen || []);
+  laadDagBezoekSchema(p.dagBezoekSchema || {});
   laadFrequentie(p.frequentie || null);
   showTab('nieuw');
   // Verberg foto-import en install-banner bij bewerken
@@ -2448,6 +2627,7 @@ function slaPatientOp() {
     frequentie: leesFrequentie(),
     nietBezoek: [...nietBezoekPeriodes],
     eenmaligAfwijkingen: [...eenmaligAfwijkingen],
+    dagBezoekSchema: JSON.parse(JSON.stringify(dagBezoekSchema)),
     overledenDatum: document.getElementById('f-status').value === 'overleden'
       ? (patienten.find(x => x.id === editId)?.overledenDatum || new Date().toISOString().slice(0,10))
       : null
@@ -2479,56 +2659,81 @@ function genereerRondes() {
 
   const actief = patienten.filter(p =>
     p.status === 'actief'
+    && p.status !== 'overleden'
     && !afwezigOp(p, dagNaam)
     && isAanDeBeurt(p, d)
     && !isInNietBezoekPeriode(p, d)
-    && p.status !== 'overleden'
   );
 
-  // Verrijk elke patiënt met dag-specifieke info
-  const verrijkt = actief.map(p => {
+  // Bouw een platte lijst van alle "bezoekinstanties" voor vandaag
+  // Elke instantie = 1 stop in de ronde
+  const alleBezoeken = [];
+  actief.forEach(p => {
     const eenmalig = getEenmaligVoorDatum(p, d);
-    return {
-      ...p,
-      duurVandaag: duurOpDatum(p, d),
-      zorgenVandaag: zorgenOpDatum(p, d),
-      heeftDagAfwijking: !!(p.dagSchema && p.dagSchema[DAYS_SHORT[d.getDay()]] && p.dagSchema[DAYS_SHORT[d.getDay()]].actief),
-      tijdsBeperking: p.tijdsSchema && p.tijdsSchema[DAYS_SHORT[d.getDay()]] && p.tijdsSchema[DAYS_SHORT[d.getDay()]].actief ? p.tijdsSchema[DAYS_SHORT[d.getDay()]] : null,
-      eenmaligVandaag: eenmalig
-    };
+    const bezoeken = getBezoeken(p, d);
+    bezoeken.forEach((b, bi) => {
+      alleBezoeken.push({
+        ...p,
+        // Bezoek-specifieke velden overschrijven patiënt-standaard
+        duurVandaag: b.duur,
+        zorgenVandaag: b.zorgen || zorgenOpDatum(p, d),
+        van: b.van,
+        tot: b.tot,
+        vanAvond: b.van,
+        totAvond: b.tot,
+        rondeBezoek: b.ronde,
+        bezoekLabel: b.label,
+        bezoekNummer: bi + 1,
+        aantalBezoeken: bezoeken.length,
+        heeftDagAfwijking: !!(p.dagSchema && p.dagSchema[DAYS_SHORT[d.getDay()]] && p.dagSchema[DAYS_SHORT[d.getDay()]].actief),
+        tijdsBeperking: (bi === 0 && p.tijdsSchema && p.tijdsSchema[DAYS_SHORT[d.getDay()]] && p.tijdsSchema[DAYS_SHORT[d.getDay()]].actief)
+          ? p.tijdsSchema[DAYS_SHORT[d.getDay()]] : null,
+        eenmaligVandaag: bi === 0 ? eenmalig : null,
+        // unieke sleutel per bezoek voor route-optimalisatie
+        bezoekId: p.id + '_' + bi
+      });
+    });
   });
 
-  // Splits ochtend/avond
-  const ochtendPts = verrijkt.filter(p => p.ronde === 'ochtend' || p.ronde === 'beide');
-  const avondPts = verrijkt.filter(p => p.ronde === 'avond' || p.ronde === 'beide');
-
-  // Verdeel ochtendpatiënten over rondes op basis van tijdvensters
-  // Patiënten met vroeg eindtijdstip komen in vroegere rondes
-  const gesorteerdeOchtend = [...ochtendPts].sort((a, b) => {
-    const totA = tijdNaarMinuten(a.tot || '09:30');
-    const totB = tijdNaarMinuten(b.tot || '09:30');
-    return totA - totB;
+  // Groepeer bezoeken per ronde
+  const rondeMap = { ochtend: [], middag: [], avond: [] };
+  alleBezoeken.forEach(b => {
+    const r = b.rondeBezoek || 'ochtend';
+    if (!rondeMap[r]) rondeMap[r] = [];
+    rondeMap[r].push(b);
   });
 
-  const startUren = ['07:00','07:30','08:00','08:30'];
-  const rondeGroepen = Array.from({length: nRondes}, () => []);
-  gesorteerdeOchtend.forEach((p, i) => rondeGroepen[i % nRondes].push(p));
+  // Ochtendrondes opsplitsen over nRondes
+  const startUren = { ochtend: ['07:00','07:30','08:00','08:30'], middag: ['12:00'], avond: ['17:00'] };
+  const rondeLabels = { ochtend: 'ochtend', middag: 'middag', avond: 'avond' };
+  const rondeKlasse = { ochtend: 'ochtend', middag: 'ochtend', avond: 'avond' };
+  const rondeIcoon = { ochtend: '\u2600\uFE0F', middag: '\uD83C\uDF24', avond: '\uD83C\uDF19' };
 
-  // Optimaliseer elke ronde met tijdvensters
-  const rondes = rondeGroepen
-    .map((pts, i) => {
-      const startStr = startUren[i] || '07:00';
-      const startMin = tijdNaarMinuten(startStr);
-      const geoptimaliseerd = pts.length > 0
-        ? optimaliseerRouteMetTijdvensters(pts, startMin, 'ochtend')
-        : [];
-      return { label: 'Ronde ' + (i+1) + ' \u2014 ochtend', klasse: 'ochtend', patienten: geoptimaliseerd, start: startStr };
-    })
-    .filter(r => r.patienten.length > 0);
+  const rondes = [];
 
-  if (avondPts.length) {
-    const avondGeopt = optimaliseerRouteMetTijdvensters(avondPts, tijdNaarMinuten('17:00'), 'avond');
-    rondes.push({ label: 'Avond ronde', klasse: 'avond', patienten: avondGeopt, start: '17:00' });
+  // Ochtend: verdeel over nRondes
+  if (rondeMap.ochtend.length) {
+    const gesorteerd = [...rondeMap.ochtend].sort((a, b) => tijdNaarMinuten(a.tot) - tijdNaarMinuten(b.tot));
+    const groepen = Array.from({length: nRondes}, () => []);
+    gesorteerd.forEach((p, i) => groepen[i % nRondes].push(p));
+    groepen.forEach((pts, i) => {
+      if (!pts.length) return;
+      const startStr = startUren.ochtend[i] || '07:00';
+      const geopt = optimaliseerRouteMetTijdvensters(pts, tijdNaarMinuten(startStr), 'ochtend');
+      rondes.push({ label: 'Ronde ' + (i+1) + ' \u2014 ochtend', klasse: 'ochtend', icoon: '\u2600\uFE0F', patienten: geopt, start: startStr });
+    });
+  }
+
+  // Middagronde
+  if (rondeMap.middag.length) {
+    const geopt = optimaliseerRouteMetTijdvensters(rondeMap.middag, tijdNaarMinuten('12:00'), 'middag');
+    rondes.push({ label: 'Middag ronde', klasse: 'ochtend', icoon: '\uD83C\uDF24', patienten: geopt, start: '12:00' });
+  }
+
+  // Avondronde
+  if (rondeMap.avond.length) {
+    const geopt = optimaliseerRouteMetTijdvensters(rondeMap.avond, tijdNaarMinuten('17:00'), 'avond');
+    rondes.push({ label: 'Avond ronde', klasse: 'avond', icoon: '\uD83C\uDF19', patienten: geopt, start: '17:00' });
   }
 
   const el = document.getElementById('rondes-resultaat');
@@ -2538,19 +2743,14 @@ function genereerRondes() {
   }
 
   el.innerHTML = rondes.map(r => {
-    // Bereken totale tijd inclusief reistijd
     const zorgMin = r.patienten.reduce((s, p) => s + p.duurVandaag, 0);
     const reisMin = Math.round(berekenTotaleReistijd(r.patienten));
     const totaalMin = zorgMin + reisMin;
-    const uur = Math.floor(totaalMin/60), min = totaalMin%60;
-    const duurStr = uur > 0 ? uur + 'u' + (min > 0 ? min + 'm' : '') : min + ' min';
-
-    // Bereken eindtijd ronde
+    const uur = Math.floor(totaalMin/60), min2 = totaalMin%60;
+    const duurStr = uur > 0 ? uur + 'u' + (min2 > 0 ? min2 + 'm' : '') : min2 + ' min';
     const laatste = r.patienten[r.patienten.length - 1];
     const eindMin = laatste.aankomstMinuten ? laatste.aankomstMinuten + laatste.duurVandaag : null;
-    const eindStr = eindMin ? ' · klaar ~' + minutenNaarTijd(eindMin) : '';
-
-    // Waarschuwing als tijdvensters niet volledig gerespecteerd
+    const eindStr = eindMin ? ' \xb7 klaar ~' + minutenNaarTijd(eindMin) : '';
     const heeftWarning = r.patienten.some(p => p.teLaat);
 
     const stops = r.patienten.map((p, i) => {
@@ -2560,56 +2760,50 @@ function genereerRondes() {
         ? '<span class="badge b-med" style="margin-top:3px;display:inline-block">\u2695 ' + p.medisch + '</span>' : '';
       const em = p.eenmaligVandaag;
       const eenmaligStr = em
-        ? '<span onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'block\':\'none\'" style="cursor:pointer;font-size:13px;margin-left:4px" title="Eenmalige afwijking">⚠️</span>'
+        ? '<span onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'block\':\'none\'" style="cursor:pointer;font-size:13px;margin-left:4px">\u26A0\uFE0F</span>'
           + '<div style="display:none;margin-top:4px;padding:6px 8px;background:var(--blue-pale);border-radius:var(--radius-sm);font-size:12px;color:var(--blue)">'
           + (em.voor ? 'Klaar v\xf3\xf3r <strong>' + em.voor + '</strong>' : '')
           + (em.voor && em.niet ? ' \xb7 ' : '')
           + (em.niet ? 'Niet v\xf3\xf3r <strong>' + em.niet + '</strong>' : '')
           + (em.reden ? '<br><span style="color:var(--text-muted)">' + em.reden + '</span>' : '')
-          + '</div>'
-        : '';
+          + '</div>' : '';
       const tb = p.tijdsBeperking;
       const tbStr = tb
         ? '<div style="font-size:11px;margin-top:3px;display:flex;gap:6px;flex-wrap:wrap">'
           + (tb.voor ? '<span style="background:#fdeaea;color:#a33030;padding:1px 7px;border-radius:10px">klaar v\xf3\xf3r ' + tb.voor + '</span>' : '')
           + (tb.niet ? '<span style="background:#e8f0fa;color:#1a4a7a;padding:1px 7px;border-radius:10px">niet v\xf3\xf3r ' + tb.niet + '</span>' : '')
           + '</div>' : '';
-
-      // Aankomsttijd weergave
       const aankomstKleur = p.teLaat ? 'color:#a33030;font-weight:500' : p.teVroeg ? 'color:#c47d1a' : 'color:var(--green)';
-      const aankomstWarning = p.teLaat ? ' ⚠' : '';
       const aankomstStr = p.geschatAankomst
-        ? '<div style="font-size:11px;margin-top:2px;' + aankomstKleur + '">\u23F0 geschat: ' + p.geschatAankomst + aankomstWarning + '</div>' : '';
-
-      // Tijdvenster patiënt
-      const vensterStr = r.klasse === 'avond'
-        ? (p.vanAvond || p.van) + '\u2013' + (p.totAvond || p.tot)
-        : p.van + '\u2013' + p.tot;
+        ? '<div style="font-size:11px;margin-top:2px;' + aankomstKleur + '">\u23F0 geschat: ' + p.geschatAankomst + (p.teLaat ? ' \u26A0' : '') + '</div>' : '';
+      // Meerdere bezoeken badge
+      const meerdereStr = p.aantalBezoeken > 1
+        ? ' <span style="font-size:10px;background:#e8f0fa;color:var(--blue);padding:1px 6px;border-radius:10px">bezoek ' + p.bezoekNummer + '/' + p.aantalBezoeken + '</span>' : '';
 
       return `
       <div class="stop-row">
         <div class="stop-num">${i+1}</div>
         <div style="flex:1">
-          <div class="stop-name">${p.voornaam} ${p.naam}${em ? ' \u26A0\uFE0F' : ''}</div>
+          <div class="stop-name">${p.voornaam} ${p.naam}${em ? ' \u26A0\uFE0F' : ''}${meerdereStr}</div>
           <div class="stop-detail">\uD83D\uDCCD ${p.adres || '\u2014'} \xb7 <strong>${p.duurVandaag} min</strong>${afwijkingStr}</div>
           <div class="stop-detail">${p.zorgenVandaag || '\u2014'}</div>
           ${eenmaligStr}${aankomstStr}${tbStr}${medStr}
         </div>
         <div style="text-align:right;flex-shrink:0">
-          <div class="stop-time">${vensterStr}</div>
+          <div class="stop-time">${p.van}\u2013${p.tot}</div>
         </div>
       </div>`;
     }).join('');
 
     const warningBanner = heeftWarning
-      ? '<div style="background:#fdeaea;color:#a33030;font-size:12px;padding:8px 14px;border-bottom:1px solid #f5c6c6">\u26A0\uFE0F Let op: voor \xe9\xe9n of meer pati\u00ebnten kon het tijdvenster niet volledig gerespecteerd worden. Controleer de markering (\u26A0) en pas eventueel de rondetijden aan.</div>' : '';
+      ? '<div style="background:#fdeaea;color:#a33030;font-size:12px;padding:8px 14px;border-bottom:1px solid #f5c6c6">\u26A0\uFE0F Tijdvenster kon niet volledig gerespecteerd worden voor \xe9\xe9n of meer pati\u00ebnten.</div>' : '';
 
     return `
     <div class="ronde-block">
       <div class="ronde-head">
-        <span style="font-size:18px">${r.klasse === 'avond' ? '\uD83C\uDF19' : '\u2600\uFE0F'}</span>
+        <span style="font-size:18px">${r.icoon}</span>
         <div class="ronde-head-title">${r.label}</div>
-        <div class="ronde-meta">${r.patienten.length} pat. \xb7 ~${duurStr}${eindStr} \xb7 start ${r.start}</div>
+        <div class="ronde-meta">${r.patienten.length} stops \xb7 ~${duurStr}${eindStr} \xb7 start ${r.start}</div>
       </div>
       ${warningBanner}
       ${stops}
