@@ -437,7 +437,7 @@ textarea { resize: vertical; min-height: 70px; }
     <div>
       <div class="header-logo">VP <span>planning</span></div>
       <div class="header-date" id="header-date"></div>
-      <div style="font-size:10px;opacity:0.4;margin-top:1px">v1.28</div>
+      <div style="font-size:10px;opacity:0.4;margin-top:1px">v1.33</div>
     </div>
   </div>
 </div>
@@ -910,9 +910,10 @@ textarea { resize: vertical; min-height: 70px; }
       Upload meerdere screenshots van je andere app. Claude leest elk scherm uit en plaatst de patiënten in de wachtrij hieronder. Jij controleert, past aan en bevestigt per patiënt.
     </p>
     <label class="btn btn-primary btn-full" style="cursor:pointer;justify-content:center" id="bulk-upload-label">
-      📷 Kies screenshots (meerdere tegelijk)
-      <input type="file" accept="image/*" multiple id="bulk-input" style="display:none" onchange="startBulkImport(event)">
+      📷 Kies screenshot
+      <input type="file" accept="image/*" id="bulk-input" style="display:none" onchange="startBulkImport(event)">
     </label>
+    <p style="font-size:11px;color:var(--text-muted);margin-top:6px;text-align:center">Op iPhone: kies telkens 1 foto. Tik meerdere keren op de knop om meerdere foto's toe te voegen.</p>
     <div id="bulk-voortgang" style="display:none;margin-top:12px">
       <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);margin-bottom:4px">
         <span id="bulk-voortgang-tekst">Verwerken…</span>
@@ -2475,8 +2476,12 @@ function initHeader() {
 }
 
 function registerSW() {
+  // Service worker uitgeschakeld om cache-problemen te vermijden
+  // Verwijder eventueel bestaande service workers
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      regs.forEach(reg => reg.unregister());
+    });
   }
 }
 
@@ -3183,7 +3188,7 @@ function slaanBulkWachtrijOp() {
 
 async function startBulkImport(evt) {
   const files = Array.from(evt.target.files);
-  evt.target.value = '';
+  evt.target.value = ''; // Reset zodat dezelfde foto opnieuw gekozen kan worden
   if (!files.length) return;
 
   const apiKey = getApiKey();
@@ -3199,8 +3204,7 @@ async function startBulkImport(evt) {
   const label = document.getElementById('bulk-upload-label');
 
   voortgang.style.display = 'block';
-  label.style.opacity = '0.5';
-  label.style.pointerEvents = 'none';
+  // Knop actief houden op iOS zodat je meteen volgende kan uploaden
 
   let verwerkt = 0;
   let gelukt = 0;
@@ -3300,8 +3304,6 @@ Regels:
   balk.style.width = '100%';
   tekst.textContent = gelukt + ' van ' + files.length + ' patiënten herkend';
   num.textContent = '';
-  label.style.opacity = '1';
-  label.style.pointerEvents = 'auto';
 
   slaanBulkWachtrijOp();
   renderBulkWachtrij();
