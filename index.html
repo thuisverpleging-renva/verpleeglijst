@@ -910,10 +910,9 @@ textarea { resize: vertical; min-height: 70px; }
       Upload meerdere screenshots van je andere app. Claude leest elk scherm uit en plaatst de patiënten in de wachtrij hieronder. Jij controleert, past aan en bevestigt per patiënt.
     </p>
     <label class="btn btn-primary btn-full" style="cursor:pointer;justify-content:center" id="bulk-upload-label">
-      📷 Kies screenshot
-      <input type="file" accept="image/*" id="bulk-input" style="display:none" onchange="startBulkImport(event)">
+      📷 Kies screenshots (meerdere tegelijk)
+      <input type="file" accept="image/*" multiple id="bulk-input" style="display:none" onchange="startBulkImport(event)">
     </label>
-    <p style="font-size:11px;color:var(--text-muted);margin-top:6px;text-align:center">Op iPhone: kies telkens 1 foto. Tik meerdere keren op de knop om meerdere foto's toe te voegen.</p>
     <div id="bulk-voortgang" style="display:none;margin-top:12px">
       <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);margin-bottom:4px">
         <span id="bulk-voortgang-tekst">Verwerken…</span>
