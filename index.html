@@ -2938,6 +2938,8 @@ function renderLijst() {
       ? ' <span title="' + (p.coordFout || 'Geen coördinaten') + '" style="cursor:help">📍⚠️</span>' : '';
     const coordFoutStr = (!p.lat || !p.lon || p.coordFout)
       ? '<div class="detail-field"><label>Coördinaten</label><div class="val" style="color:var(--amber)">\u26A0 ' + (p.coordFout || 'Geen coördinaten — routeplanning minder nauwkeurig') + '</div></div>' : '';
+    const medStr = p.medisch ? '<div class="detail-field"><label>Medisch profiel</label><div class="val"><span class="badge b-med">\u2695 ' + p.medisch + '</span></div></div>' : '';
+    const afwStr = p.afwezig ? '<div class="detail-field"><label>Afwezigheden</label><div class="val">' + p.afwezig + '</div></div>' : '';
     const pauzeStr = p.pauzeReden ? '<div class="detail-field"><label>Pauzeer reden</label><div class="val" style="color:var(--amber)">' + p.pauzeReden + (p.pauzeEinddatum ? ' (tot ' + p.pauzeEinddatum + ')' : '') + '</div></div>' : '';
     const behandelStr = p.eindDatumBehandeling ? '<div class="detail-field"><label>Behandeling eindigt op</label><div class="val" style="color:var(--blue)">📅 ' + new Date(p.eindDatumBehandeling + 'T12:00:00').toLocaleDateString('nl-BE', {day:'numeric',month:'long',year:'numeric'}) + ' → automatisch inactief</div></div>' : '';
     const overledenStr = p.overledenDatum ? '<div class="detail-field"><label>Overlijdensdatum</label><div class="val" style="color:#555">✝ ' + new Date(p.overledenDatum + 'T12:00:00').toLocaleDateString("nl-BE", {day:"numeric",month:"long",year:"numeric"}) + '</div></div>' : '';
