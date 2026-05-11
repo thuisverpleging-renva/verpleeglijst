@@ -2404,6 +2404,169 @@ async function sbFetch(path, options) {
   return res.json();
 }
 
+function saveData() {
+  const nu = new Date().toISOString();
+  localStorage.setItem(LOKAAL_TS_KEY, nu);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(patienten));
+  const sb = getSupabase();
+  if (sb.url && sb.key) {
+    setSyncStatus('bezig', 'Opslaan in cloud…');
+    slaOpInCloud(patienten)
+      .then(() => setSyncStatus('ok', 'Gesynchroniseerd — ' + new Date().toLocaleTimeString('nl-BE')))
+      .catch(e => setSyncStatus('fout', 'Sync mislukt: ' + e.message));
+  }
+}
+
+function mergePatientenData(lokaal, cloud) {
+  const cloudMap = {};
+  cloud.forEach(p => { if (p.id) cloudMap[p.id] = p; });
+  const lokaalMap = {};
+  lokaal.forEach(p => { if (p.id) lokaalMap[p.id] = p; });
+  const alleIds = new Set([...Object.keys(cloudMap), ...Object.keys(lokaalMap)].map(Number));
+  const result = [];
+  alleIds.forEach(id => {
+    const lp = lokaalMap[id];
+    const cp = cloudMap[id];
+    if (!cp) { result.push(lp); }
+    else if (!lp) { result.push({geslacht:'',frequentie:{type:'dagelijks'},dagSchema:{},tijdsSchema:{},nietBezoek:[],...cp}); }
+    else {
+      const lts = lp.updatedAt || '1970-01-01T00:00:00.000Z';
+      const cts = cp.updatedAt || '1970-01-01T00:00:00.000Z';
+      const w = lts >= cts ? lp : cp;
+      result.push({geslacht:'',frequentie:{type:'dagelijks'},dagSchema:{},tijdsSchema:{},nietBezoek:[],...w});
+    }
+  });
+  return result.sort((a,b) => (a.id||0) - (b.id||0));
+}
+
+async function slaOpInCloud(data) {
+  const rowId = localStorage.getItem(SB_ROW_KEY);
+  if (data.length === 0 && rowId) {
+    const bestaand = await sbFetch('patienten?select=data&id=eq.' + rowId).catch(() => []);
+    const bestaandAantal = bestaand && bestaand[0] && Array.isArray(bestaand[0].data) ? bestaand[0].data.length : 0;
+    if (bestaandAantal > 0) {
+      setSyncStatus('fout', 'Geannuleerd — zou ' + bestaandAantal + ' patiënten wissen');
+      return;
+    }
+  }
+  const nu = new Date().toISOString();
+  localStorage.setItem(LOKAAL_TS_KEY, nu);
+  if (rowId) {
+    await sbFetch('patienten?id=eq.' + rowId, {
+      method: 'PATCH',
+      body: JSON.stringify({ data: data, updated_at: nu })
+    });
+  } else {
+    const rows = await sbFetch('patienten', {
+      method: 'POST',
+      body: JSON.stringify({ data: data })
+    });
+    if (rows && rows[0]) localStorage.setItem(SB_ROW_KEY, rows[0].id);
+  }
+}
+
+const SB_BULK_ROW_KEY = 'vp_sb_bulk_row_id';
+
+async function syncBulkVanCloud() {
+  try {
+    const rows = await sbFetch('bulk_wachtrij?select=id,data&order=updated_at.desc&limit=1');
+    if (!rows || !rows.length) {
+      if (bulkWachtrij.length > 0) await slaanBulkInCloud();
+      return;
+    }
+    const row = rows[0];
+    localStorage.setItem(SB_BULK_ROW_KEY, row.id);
+    const cloudData = Array.isArray(row.data) ? row.data : [];
+    const lokaalIds = new Set(bulkWachtrij.map(p => p.bulkId));
+    const cloudIds = new Set(cloudData.map(p => p.bulkId));
+    const nieuweItems = cloudData.filter(p => !lokaalIds.has(p.bulkId));
+    if (nieuweItems.length > 0) {
+      bulkWachtrij = [...bulkWachtrij, ...nieuweItems];
+      localStorage.setItem(BULK_KEY, JSON.stringify(bulkWachtrij));
+      renderBulkWachtrij();
+    }
+    const lokaalNieuw = bulkWachtrij.filter(p => !cloudIds.has(p.bulkId));
+    if (lokaalNieuw.length > 0 || cloudData.length !== bulkWachtrij.length) {
+      await slaanBulkInCloud();
+    }
+  } catch(e) {
+    console.warn('Bulk sync mislukt:', e.message);
+  }
+}
+
+async function slaanBulkInCloud() {
+  const rowId = localStorage.getItem(SB_BULK_ROW_KEY);
+  try {
+    if (rowId) {
+      await sbFetch('bulk_wachtrij?id=eq.' + rowId, {
+        method: 'PATCH',
+        body: JSON.stringify({ data: bulkWachtrij, updated_at: new Date().toISOString() })
+      });
+    } else {
+      const rows = await sbFetch('bulk_wachtrij', {
+        method: 'POST',
+        body: JSON.stringify({ data: bulkWachtrij })
+      });
+      if (rows && rows[0]) localStorage.setItem(SB_BULK_ROW_KEY, rows[0].id);
+    }
+  } catch(e) {
+    console.warn('Bulk cloud sync mislukt:', e.message);
+  }
+}
+
+async function laadVanCloud() {
+  setSyncStatus('bezig', 'Laden uit cloud…');
+  const rows = await sbFetch('patienten?select=id,data,updated_at&order=updated_at.desc&limit=1');
+  const lokaalAantal = patienten.filter(p => p.id).length;
+  const lokaalTs = localStorage.getItem(LOKAAL_TS_KEY) || '1970-01-01T00:00:00.000Z';
+
+  if (!rows || !rows.length) {
+    if (lokaalAantal > 0) {
+      await slaOpInCloud(patienten);
+      setSyncStatus('ok', lokaalAantal + ' patiënten geüpload naar cloud');
+    } else {
+      setSyncStatus('ok', 'Gesynchroniseerd — cloud en lokaal zijn leeg');
+    }
+    await syncBulkVanCloud();
+    return;
+  }
+
+  const row = rows[0];
+  localStorage.setItem(SB_ROW_KEY, row.id);
+  const cloudData = Array.isArray(row.data) ? row.data : [];
+  const cloudAantal = cloudData.filter(p => p.id).length;
+  const cloudTs = row.updated_at || '1970-01-01T00:00:00.000Z';
+
+  if (cloudAantal === 0 && lokaalAantal > 0) {
+    await slaOpInCloud(patienten);
+    setSyncStatus('ok', lokaalAantal + ' lokale patiënten geüpload naar cloud');
+    await syncBulkVanCloud();
+    return;
+  }
+
+  if (lokaalAantal > 0 && lokaalTs > cloudTs) {
+    await slaOpInCloud(patienten);
+    setSyncStatus('ok', 'Lokale data is recenter — geüpload (' + new Date(lokaalTs).toLocaleTimeString('nl-BE') + ')');
+    await syncBulkVanCloud();
+    return;
+  }
+
+  const merged = mergePatientenData(patienten, cloudData);
+  patienten = merged;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(patienten));
+  localStorage.setItem(LOKAAL_TS_KEY, cloudTs);
+
+  if (JSON.stringify(merged) !== JSON.stringify(cloudData)) {
+    await slaOpInCloud(patienten);
+    setSyncStatus('ok', 'Samengevoegd — ' + patienten.filter(p=>p.id).length + ' patiënten');
+  } else {
+    setSyncStatus('ok', 'Gesynchroniseerd — ' + cloudAantal + ' patiënten (' + new Date(cloudTs).toLocaleTimeString('nl-BE') + ')');
+  }
+  renderLijst();
+  checkBirthdays();
+  await syncBulkVanCloud();
+}
+
 async function syncNu() {
   const sb = getSupabase();
   if (!sb.url || !sb.key) {
