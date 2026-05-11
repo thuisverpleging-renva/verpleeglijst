@@ -511,6 +511,7 @@ textarea { resize: vertical; min-height: 70px; }
       <option value="leeftijd-jong">Leeftijd: jong→oud</option>
       <option value="leeftijd-oud">Leeftijd: oud→jong</option>
       <option value="geslacht">Geslacht</option>
+      <option value="coord-fout">⚠️ Coördinaten fout</option>
     </select>
   </div>
   <div id="patient-lijst"></div>
@@ -889,6 +890,7 @@ textarea { resize: vertical; min-height: 70px; }
       <button type="button" class="btn btn-outline btn-full" style="margin-top:8px" onclick="zoekCoordinaten()">
         📍 Haal coördinaten automatisch op uit adres
       </button>
+      <input type="hidden" id="f-coord-fout" value="">
       <div id="geo-status" style="font-size:12px;margin-top:6px;display:none"></div>
     </div>
   </div>
@@ -1284,24 +1286,50 @@ async function autoZoekCoordinaten() {
   const adres = document.getElementById('f-adres').value.trim();
   const latEl = document.getElementById('f-lat');
   const lonEl = document.getElementById('f-lon');
-  // Alleen ophalen als er nog geen coördinaten zijn
-  if (!adres || (latEl.value && lonEl.value)) return;
+  if (!adres) return;
+  // Altijd ophalen — ook bij bewerken zodat gewijzigd adres nieuwe coords krijgt
   try {
     const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=be&q=' + encodeURIComponent(adres);
-    const res = await fetch(url, { headers: { 'Accept-Language': 'nl', 'User-Agent': 'VP-Planning-App' } });
+    const res = await fetch(url, {
+      headers: { 'Accept-Language': 'nl', 'User-Agent': 'VP-Planning-App/1.0' }
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
+    const status = document.getElementById('geo-status');
     if (data && data.length) {
       latEl.value = parseFloat(parseFloat(data[0].lat).toFixed(5));
       lonEl.value = parseFloat(parseFloat(data[0].lon).toFixed(5));
-      const status = document.getElementById('geo-status');
+      // Coördinaten OK — verwijder foutmarkering
+      document.getElementById('f-coord-fout').value = '';
       if (status) {
         status.style.display = 'block';
         status.style.color = 'var(--green)';
-        status.textContent = '✓ Coördinaten automatisch ingevuld';
-        setTimeout(() => status.style.display = 'none', 3000);
+        status.textContent = '\u2713 Coördinaten automatisch ingevuld';
+        setTimeout(() => { if(status) status.style.display = 'none'; }, 3000);
+      }
+    } else {
+      // Adres niet gevonden
+      latEl.value = '';
+      lonEl.value = '';
+      document.getElementById('f-coord-fout').value = 'Adres niet gevonden — controleer de spelling';
+      if (status) {
+        status.style.display = 'block';
+        status.style.color = 'var(--amber)';
+        status.textContent = '\u26A0 Adres niet gevonden. Controleer spelling of vul coördinaten manueel in.';
       }
     }
-  } catch(e) { /* stille fout — gebruiker kan altijd manueel ophalen */ }
+  } catch(e) {
+    const latLeeg = !latEl.value;
+    if (latLeeg) {
+      document.getElementById('f-coord-fout').value = 'Coördinaten konden niet worden opgehaald';
+      const status = document.getElementById('geo-status');
+      if (status) {
+        status.style.display = 'block';
+        status.style.color = 'var(--text-muted)';
+        status.textContent = 'Coördinaten konden niet worden opgehaald. Gebruik de knop hieronder of vul manueel in.';
+      }
+    }
+  }
 }
 
 async function zoekCoordinaten() {
@@ -1322,15 +1350,17 @@ async function zoekCoordinaten() {
     const data = await res.json();
     if (!data || !data.length) {
       status.style.color = 'var(--red)';
-      status.textContent = '✗ Adres niet gevonden. Probeer met gemeente erbij (bv. "Kerkstraat 12, Ichtegem").';
+      status.textContent = '\u2717 Adres niet gevonden. Probeer met gemeente erbij (bv. "Kerkstraat 12, Ichtegem").';
+      document.getElementById('f-coord-fout').value = 'Adres niet gevonden';
       return;
     }
     const lat = parseFloat(parseFloat(data[0].lat).toFixed(5));
     const lon = parseFloat(parseFloat(data[0].lon).toFixed(5));
     document.getElementById('f-lat').value = lat;
     document.getElementById('f-lon').value = lon;
+    document.getElementById('f-coord-fout').value = '';
     status.style.color = 'var(--green)';
-    status.textContent = '✓ Gevonden: ' + data[0].display_name.split(',').slice(0,3).join(',');
+    status.textContent = '\u2713 Gevonden: ' + data[0].display_name.split(',').slice(0,3).join(',');
   } catch(e) {
     status.style.color = 'var(--red)';
     status.textContent = '✗ Verbindingsfout. Controleer je internetverbinding.';
@@ -1717,7 +1747,7 @@ function voerOpslaanUit(p) {
 }
 
 function resetFormulier() {
-  ['voornaam','naam','adres','geb','tel','zorgen','afwezig-extra','medisch','lat','lon','einddatum-behandeling'].forEach(f => {
+  ['voornaam','naam','adres','geb','tel','zorgen','afwezig-extra','medisch','lat','lon','einddatum-behandeling','coord-fout'].forEach(f => {
     const el = document.getElementById('f-' + f);
     if (el) el.value = '';
   });
@@ -2855,7 +2885,9 @@ function renderLijst() {
     const zoekOk = nm.includes(q) || adr.includes(q);
     const statusOk = fs === 'all' ? p.status !== 'overleden' : p.status === fs;
     const geslachtOk = fg === 'all' || p.geslacht === fg;
-    return zoekOk && statusOk && geslachtOk;
+    // Bij coord-fout sortering: toon alleen patiënten zonder coördinaten of met foutmelding
+    const coordFoutOk = sorteer !== 'coord-fout' || (!p.lat || !p.lon || p.coordFout);
+    return zoekOk && statusOk && geslachtOk && coordFoutOk;
   });
 
   // Sortering
@@ -2878,6 +2910,11 @@ function renderLijst() {
         const gb = geslachtVolgorde[b.geslacht] ?? 3;
         return ga !== gb ? ga - gb : (a.naam + a.voornaam).localeCompare(b.naam + b.voornaam, 'nl');
       }
+      case 'coord-fout': {
+        const aFout = !a.lat || !a.lon || !!a.coordFout ? 0 : 1;
+        const bFout = !b.lat || !b.lon || !!b.coordFout ? 0 : 1;
+        return aFout - bFout;
+      }
       default: return 0;
     }
   });
@@ -2897,8 +2934,10 @@ function renderLijst() {
     const gsl = geslachtLabel(p.geslacht);
     const ageStr = age ? ' <span style="font-weight:300;color:var(--text-muted);font-size:12px">\xb7 ' + age + ' j</span>' : '';
     const gslStr = gsl ? ' <span style="font-size:11px;color:var(--text-muted)">' + gsl + '</span>' : '';
-    const medStr = p.medisch ? '<div class="detail-field"><label>Medisch profiel</label><div class="val"><span class="badge b-med">\u2695 ' + p.medisch + '</span></div></div>' : '';
-    const afwStr = p.afwezig ? '<div class="detail-field"><label>Afwezigheden</label><div class="val">' + p.afwezig + '</div></div>' : '';
+    const coordWarn = (!p.lat || !p.lon || p.coordFout) && p.status !== 'overleden'
+      ? ' <span title="' + (p.coordFout || 'Geen coördinaten') + '" style="cursor:help">📍⚠️</span>' : '';
+    const coordFoutStr = (!p.lat || !p.lon || p.coordFout)
+      ? '<div class="detail-field"><label>Coördinaten</label><div class="val" style="color:var(--amber)">\u26A0 ' + (p.coordFout || 'Geen coördinaten — routeplanning minder nauwkeurig') + '</div></div>' : '';
     const pauzeStr = p.pauzeReden ? '<div class="detail-field"><label>Pauzeer reden</label><div class="val" style="color:var(--amber)">' + p.pauzeReden + (p.pauzeEinddatum ? ' (tot ' + p.pauzeEinddatum + ')' : '') + '</div></div>' : '';
     const behandelStr = p.eindDatumBehandeling ? '<div class="detail-field"><label>Behandeling eindigt op</label><div class="val" style="color:var(--blue)">📅 ' + new Date(p.eindDatumBehandeling + 'T12:00:00').toLocaleDateString('nl-BE', {day:'numeric',month:'long',year:'numeric'}) + ' → automatisch inactief</div></div>' : '';
     const overledenStr = p.overledenDatum ? '<div class="detail-field"><label>Overlijdensdatum</label><div class="val" style="color:#555">✝ ' + new Date(p.overledenDatum + 'T12:00:00').toLocaleDateString("nl-BE", {day:"numeric",month:"long",year:"numeric"}) + '</div></div>' : '';
@@ -2920,7 +2959,7 @@ function renderLijst() {
       <div class="patient-header" onclick="toggleDetail(${p.id})">
         <div class="avatar">${initials(p)}</div>
         <div style="flex:1">
-          <div class="patient-name">${p.voornaam} ${p.naam}${ageStr}${gslStr}</div>
+          <div class="patient-name">${p.voornaam} ${p.naam}${ageStr}${gslStr}${coordWarn}</div>
           <div class="patient-sub">\uD83D\uDCCD ${p.adres || '\u2014'}</div>
         </div>
         <div class="badges">
@@ -2938,7 +2977,7 @@ function renderLijst() {
           <div class="detail-field"><label>Frequentie</label><div class="val">${freqOmschrijving(p.frequentie)}</div></div>
         </div>
         <div class="detail-field"><label>Verpleegkundige zorgen</label><div class="val">${p.zorgen || '\u2014'}</div></div>
-        ${medStr}${afwStr}${pauzeStr}${behandelStr}${overledenStr}
+        ${coordFoutStr}${medStr}${afwStr}${pauzeStr}${behandelStr}${overledenStr}
         <div class="detail-actions">
           <button class="btn btn-sm" onclick="bewerkPatient(${p.id})">\u270F\uFE0F Bewerken</button>
           ${p.status !== 'overleden' ? '<button class="btn btn-sm" style="background:var(--amber-pale);color:var(--amber);border-color:var(--amber)" onclick="toonPauzeerdialoog(' + p.id + ')">' + (p.status === 'actief' ? '\u23F8 Pauzeren' : '\u25B6\uFE0F Hervatten') + '</button>' : '<button class="btn btn-sm" style="background:var(--green-pale);color:var(--green);border-color:var(--green-mid)" onclick="herstelVanOverleden(' + p.id + ')">\u21A9 Herstellen</button>'}
@@ -2982,6 +3021,7 @@ function bewerkPatient(id) {
   F('medisch').value = p.medisch || '';
   F('lat').value = p.lat || '';
   F('lon').value = p.lon || '';
+  document.getElementById('f-coord-fout').value = p.coordFout || '';
   initDagSchemaForm(p.dagSchema || {});
   initTijdsSchemaForm(p.tijdsSchema || {});
   laadNietBezoek(p.nietBezoek || []);
@@ -3027,6 +3067,7 @@ function slaPatientOp() {
     medisch: F('medisch'),
     lat: parseFloat(F('lat')) || null,
     lon: parseFloat(F('lon')) || null,
+    coordFout: document.getElementById('f-coord-fout').value || null,
     dagSchema: leesDagSchema(),
     tijdsSchema: leesTijdsSchema(),
     frequentie: leesFrequentie(),
