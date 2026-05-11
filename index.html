@@ -576,6 +576,29 @@ textarea { resize: vertical; min-height: 70px; }
         </select>
       </div>
     </div>
+    <div style="margin-top:10px;padding:10px;background:var(--cream);border-radius:var(--radius-sm);border:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:500;color:var(--text-muted);margin-bottom:8px">📅 BEHANDELPERIODE — automatisch inactief na einddatum</div>
+      <div class="form-grid">
+        <div class="field">
+          <label>Einddatum behandeling</label>
+          <input type="date" id="f-einddatum-behandeling">
+        </div>
+        <div class="field">
+          <label>Of snel instellen</label>
+          <select id="f-einddatum-snel" onchange="stelEinddatumIn(this.value)">
+            <option value="">— kies sneloptie —</option>
+            <option value="7">7 dagen</option>
+            <option value="14">14 dagen (2 weken)</option>
+            <option value="21">21 dagen (3 weken)</option>
+            <option value="30">30 dagen (1 maand)</option>
+            <option value="42">42 dagen (6 weken)</option>
+            <option value="60">60 dagen (2 maanden)</option>
+            <option value="90">90 dagen (3 maanden)</option>
+          </select>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Na de einddatum wordt de patiënt automatisch op <strong>inactief</strong> gezet. Leeg laten = geen einddatum.</div>
+    </div>
   </div>
   <div class="card">
     <div class="section-title">Verzorging & planning</div>
@@ -1560,6 +1583,12 @@ function checkPauzeHervat() {
     if (p.status === 'inactief' && p.pauzeEinddatum && vandaag > p.pauzeEinddatum) {
       p.status = 'actief'; p.pauzeEinddatum = null; gewijzigd = true;
     }
+    if (p.status === 'actief' && p.eindDatumBehandeling && vandaag > p.eindDatumBehandeling) {
+      p.status = 'inactief';
+      p.pauzeReden = 'Behandelperiode afgelopen (' + new Date(p.eindDatumBehandeling + 'T12:00:00').toLocaleDateString('nl-BE', {day:'numeric',month:'long',year:'numeric'}) + ')';
+      p.eindDatumBehandeling = null;
+      gewijzigd = true;
+    }
   });
   if (gewijzigd) { saveData(); renderLijst(); }
 }
@@ -1626,7 +1655,7 @@ function voerOpslaanUit(p) {
 }
 
 function resetFormulier() {
-  ['voornaam','naam','adres','geb','tel','zorgen','afwezig-extra','medisch','lat','lon'].forEach(f => {
+  ['voornaam','naam','adres','geb','tel','zorgen','afwezig-extra','medisch','lat','lon','einddatum-behandeling'].forEach(f => {
     const el = document.getElementById('f-' + f);
     if (el) el.value = '';
   });
@@ -2799,6 +2828,7 @@ function renderLijst() {
     const medStr = p.medisch ? '<div class="detail-field"><label>Medisch profiel</label><div class="val"><span class="badge b-med">\u2695 ' + p.medisch + '</span></div></div>' : '';
     const afwStr = p.afwezig ? '<div class="detail-field"><label>Afwezigheden</label><div class="val">' + p.afwezig + '</div></div>' : '';
     const pauzeStr = p.pauzeReden ? '<div class="detail-field"><label>Pauzeer reden</label><div class="val" style="color:var(--amber)">' + p.pauzeReden + (p.pauzeEinddatum ? ' (tot ' + p.pauzeEinddatum + ')' : '') + '</div></div>' : '';
+    const behandelStr = p.eindDatumBehandeling ? '<div class="detail-field"><label>Behandeling eindigt op</label><div class="val" style="color:var(--blue)">📅 ' + new Date(p.eindDatumBehandeling + 'T12:00:00').toLocaleDateString('nl-BE', {day:'numeric',month:'long',year:'numeric'}) + ' → automatisch inactief</div></div>' : '';
     const overledenStr = p.overledenDatum ? '<div class="detail-field"><label>Overlijdensdatum</label><div class="val" style="color:#555">✝ ' + new Date(p.overledenDatum + 'T12:00:00').toLocaleDateString("nl-BE", {day:"numeric",month:"long",year:"numeric"}) + '</div></div>' : '';
 
     // Groepsheader bij geslacht-sortering
@@ -2836,7 +2866,7 @@ function renderLijst() {
           <div class="detail-field"><label>Frequentie</label><div class="val">${freqOmschrijving(p.frequentie)}</div></div>
         </div>
         <div class="detail-field"><label>Verpleegkundige zorgen</label><div class="val">${p.zorgen || '\u2014'}</div></div>
-        ${medStr}${afwStr}${pauzeStr}${overledenStr}
+        ${medStr}${afwStr}${pauzeStr}${behandelStr}${overledenStr}
         <div class="detail-actions">
           <button class="btn btn-sm" onclick="bewerkPatient(${p.id})">\u270F\uFE0F Bewerken</button>
           ${p.status !== 'overleden' ? '<button class="btn btn-sm" style="background:var(--amber-pale);color:var(--amber);border-color:var(--amber)" onclick="toonPauzeerdialoog(' + p.id + ')">' + (p.status === 'actief' ? '\u23F8 Pauzeren' : '\u25B6\uFE0F Hervatten') + '</button>' : '<button class="btn btn-sm" style="background:var(--green-pale);color:var(--green);border-color:var(--green-mid)" onclick="herstelVanOverleden(' + p.id + ')">\u21A9 Herstellen</button>'}
@@ -2867,6 +2897,7 @@ function bewerkPatient(id) {
   F('geslacht').value = p.geslacht || '';
   F('tel').value = p.tel || '';
   F('status').value = p.status || 'actief';
+  document.getElementById('f-einddatum-behandeling').value = p.eindDatumBehandeling || '';
   F('ronde').value = p.ronde || 'ochtend';
   toggleRondeUren();
   setTijdWaarde('f-van', p.van || '07:00');
@@ -2929,6 +2960,7 @@ function slaPatientOp() {
     nietBezoek: [...nietBezoekPeriodes],
     eenmaligAfwijkingen: [...eenmaligAfwijkingen],
     dagBezoekSchema: JSON.parse(JSON.stringify(dagBezoekSchema)),
+    eindDatumBehandeling: document.getElementById('f-einddatum-behandeling').value || null,
     overledenDatum: document.getElementById('f-status').value === 'overleden'
       ? (patienten.find(x => x.id === editId)?.overledenDatum || new Date().toISOString().slice(0,10))
       : null
