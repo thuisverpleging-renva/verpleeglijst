@@ -2404,6 +2404,19 @@ async function sbFetch(path, options) {
   return res.json();
 }
 
+async function syncNu() {
+  const sb = getSupabase();
+  if (!sb.url || !sb.key) {
+    setSyncStatus('fout', 'Vul eerst je Supabase sleutels in');
+    return;
+  }
+  try {
+    await laadVanCloud();
+  } catch(e) {
+    setSyncStatus('fout', 'Sync mislukt: ' + e.message);
+  }
+}
+
 const LOKAAL_TS_KEY = 'vp_lokaal_timestamp';
 
 function defaultPatients() {
@@ -2415,6 +2428,21 @@ function defaultPatients() {
     {id:5,voornaam:'Simone',naam:'Leclercq',adres:'Stationsstraat 19, Ichtegem',geb:'1948-08-06',tel:'051 58 33 22',status:'inactief',van:'08:00',tot:'10:00',duur:20,ronde:'ochtend',zorgen:'Bloedafname',afwezig:'',medisch:'Anticoagulantia',lat:51.080,lon:3.008}
   ];
 }
+
+function loadData() {
+  try {
+    const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (data && Array.isArray(data)) {
+      return data.map(p => ({
+        geslacht: '', frequentie: { type: 'dagelijks' }, dagSchema: {}, tijdsSchema: {}, nietBezoek: [], ...p
+      }));
+    }
+    return [];
+  } catch(e) { return []; }
+}
+
+let patienten = loadData();
+let editId = null;
 
 let nextId = () => Math.max(0, ...patienten.map(p => p.id)) + 1;
 
