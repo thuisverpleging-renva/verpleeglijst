@@ -663,7 +663,9 @@ textarea { resize: vertical; min-height: 70px; }
   <div class="card">
     <div class="section-title">Meerdere bezoeken per dag <span style="font-weight:300;font-size:10px;color:var(--text-muted)">(optioneel — bv. 4x/dag bij diabetes)</span></div>
     <p class="schema-hint" style="margin-bottom:10px">Stel per weekdag in hoeveel bezoeken er zijn en wanneer. Elk bezoek heeft zijn eigen tijdvenster, zorgen en duur. Laat leeg voor dagen met standaard 1 bezoek.</p>
-    <div id="dagbezoek-tabs" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">
+    <div id="dagbezoek-tabs" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+      <button type="button" class="btn btn-sm btn-outline" onclick="selectAlleDagen()" style="font-size:11px;padding:5px 10px">Alle dagen</button>
+      <div style="width:1px;height:20px;background:var(--border);margin:0 2px"></div>
       <button type="button" class="dag-knop" data-dag="zo" onclick="selectDagbezoek(this,'zo')">Zo</button>
       <button type="button" class="dag-knop" data-dag="ma" onclick="selectDagbezoek(this,'ma')">Ma</button>
       <button type="button" class="dag-knop" data-dag="di" onclick="selectDagbezoek(this,'di')">Di</button>
@@ -1780,6 +1782,37 @@ function resetFormulier() {
 let dagBezoekSchema = {};
 let huidigeDagbezoekDag = null;
 const RONDE_LABELS = { ochtend: '☀️ Ochtend', middag: '🌤 Middag', avond: '🌙 Avond' };
+
+function selectAlleDagen() {
+  // Kopieer het bezoekschema van de huidige dag naar alle andere dagen
+  const huidig = huidigeDagbezoekDag;
+  const bronBezoeken = huidig && dagBezoekSchema[huidig] ? [...dagBezoekSchema[huidig]] : [];
+
+  if (!bronBezoeken.length) {
+    // Nog geen dag geselecteerd met bezoeken — stel eerst bezoeken in voor één dag
+    alert('Stel eerst bezoeken in voor één dag, dan kan je die naar alle dagen kopiëren.');
+    return;
+  }
+
+  if (!confirm('De bezoeken van ' + huidig.toUpperCase() + ' kopiëren naar alle andere dagen?')) return;
+
+  DAYS_SHORT.forEach(dag => {
+    dagBezoekSchema[dag] = bronBezoeken.map(b => ({...b}));
+  });
+
+  renderDagbezoekLijst();
+
+  // Update badges op alle knoppen
+  document.querySelectorAll('#dagbezoek-tabs .dag-knop').forEach(btn => {
+    const dag = btn.dataset.dag;
+    const n = (dagBezoekSchema[dag] || []).length;
+    const label = ['Zo','Ma','Di','Wo','Do','Vr','Za'][['zo','ma','di','wo','do','vr','za'].indexOf(dag)];
+    if (n > 0) {
+      btn.classList.add('actief');
+      btn.innerHTML = label + ' <span style="font-size:9px;background:var(--green);color:white;border-radius:10px;padding:0 4px;vertical-align:top">' + n + '</span>';
+    }
+  });
+}
 
 function selectDagbezoek(btn, dag) {
   document.querySelectorAll('#dagbezoek-tabs .dag-knop').forEach(b => b.classList.remove('actief'));
