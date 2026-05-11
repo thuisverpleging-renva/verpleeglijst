@@ -675,7 +675,9 @@ textarea { resize: vertical; min-height: 70px; }
         <option value="dagelijks">Dagelijks</option>
         <option value="vaste-dagen">Vaste dagen (bv. ma/wo/vr)</option>
         <option value="interval-dag">Interval in dagen (bv. om de 2 dagen)</option>
-        <option value="interval-week">Interval in weken (bv. om de 2 weken)</option>
+        <option value="interval-week">Interval in weken (bv. om de 2-6 weken)</option>
+        <option value="dag-van-maand">Dag van de maand (bv. eerste maandag)</option>
+        <option value="vaste-datums">Vaste datums (manueel kiezen)</option>
         <option value="alternerend">Alternerende zorg (bv. avond aanhangen / ochtend afkoppelen)</option>
       </select>
     </div>
@@ -702,7 +704,15 @@ textarea { resize: vertical; min-height: 70px; }
 
     <div id="freq-interval-week" style="display:none">
       <div class="form-grid">
-        <div class="field"><label>Om de … weken</label><input type="number" id="f-interval-week" value="2" min="2" max="52"></div>
+        <div class="field"><label>Om de … weken</label>
+          <select id="f-interval-week">
+            <option value="2">2 weken</option>
+            <option value="3">3 weken</option>
+            <option value="4">4 weken (maandelijks)</option>
+            <option value="5">5 weken</option>
+            <option value="6">6 weken</option>
+          </select>
+        </div>
         <div class="field"><label>Startdatum (eerste bezoek)</label><input type="date" id="f-interval-week-start"></div>
       </div>
       <div style="margin-top:8px">
@@ -716,6 +726,42 @@ textarea { resize: vertical; min-height: 70px; }
           <button type="button" class="dag-knop" data-dag="za" onclick="toggleWeekDagKnop(this)">Za</button>
           <button type="button" class="dag-knop" data-dag="zo" onclick="toggleWeekDagKnop(this)">Zo</button>
         </div>
+      </div>
+    </div>
+
+    <div id="freq-dag-van-maand" style="display:none">
+      <p class="schema-hint" style="margin-bottom:8px">Bv. eerste maandag van de maand, of derde vrijdag.</p>
+      <div class="form-grid">
+        <div class="field"><label>Welke week van de maand</label>
+          <select id="f-maand-week">
+            <option value="1">Eerste</option>
+            <option value="2">Tweede</option>
+            <option value="3">Derde</option>
+            <option value="4">Vierde</option>
+            <option value="last">Laatste</option>
+          </select>
+        </div>
+        <div class="field"><label>Dag van de week</label>
+          <select id="f-maand-dag">
+            <option value="1">Maandag</option>
+            <option value="2">Dinsdag</option>
+            <option value="3">Woensdag</option>
+            <option value="4">Donderdag</option>
+            <option value="5">Vrijdag</option>
+            <option value="6">Zaterdag</option>
+            <option value="0">Zondag</option>
+          </select>
+        </div>
+      </div>
+      <p class="schema-hint" style="margin-top:6px">Voorbeeld: "Eerste maandag" = elke eerste maandag van de maand.</p>
+    </div>
+
+    <div id="freq-vaste-datums" style="display:none">
+      <p class="schema-hint" style="margin-bottom:8px">Voeg specifieke datums toe waarop de patiënt bezocht wordt. Ideaal voor eenmalige of onregelmatige injecties.</p>
+      <div id="vaste-datums-lijst" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="date" id="f-nieuwe-datum" style="flex:1">
+        <button type="button" class="btn btn-sm btn-primary" onclick="voegVasteDatumToe()">+ Toevoegen</button>
       </div>
     </div>
 
@@ -1952,12 +1998,53 @@ function geslachtLabel(g) {
   return g === 'v' ? '\u2640 Vrouw' : g === 'm' ? '\u2642 Man' : g === 'x' ? '\u26a7 X' : '';
 }
 
+// ── VASTE DATUMS ──────────────────────────────────────────────────
+let vasteDatums = [];
+
+function renderVasteDatums() {
+  const el = document.getElementById('vaste-datums-lijst');
+  if (!el) return;
+  if (!vasteDatums.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">Geen datums toegevoegd</div>';
+    return;
+  }
+  const gesorteerd = [...vasteDatums].sort();
+  const vandaag = new Date().toISOString().slice(0, 10);
+  el.innerHTML = gesorteerd.map(d => {
+    const verlopen = d < vandaag;
+    const datumObj = new Date(d + 'T12:00:00');
+    const label = datumObj.toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
+    return '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:' + (verlopen ? 'var(--cream-dark)' : 'var(--green-pale)') + ';border-radius:var(--radius-sm);font-size:12px;opacity:' + (verlopen ? '0.6' : '1') + '">'
+      + '<span style="flex:1;color:' + (verlopen ? 'var(--text-muted)' : 'var(--green)') + '">' + label + (verlopen ? ' <em>(verlopen)</em>' : '') + '</span>'
+      + '<button type="button" class="btn btn-sm btn-danger" style="padding:2px 7px" onclick="verwijderVasteDatum(\'' + d + '\')">✕</button>'
+      + '</div>';
+  }).join('');
+}
+
+function voegVasteDatumToe() {
+  const input = document.getElementById('f-nieuwe-datum');
+  const datum = input.value;
+  if (!datum) { alert('Kies een datum.'); return; }
+  if (vasteDatums.includes(datum)) { alert('Deze datum staat er al in.'); return; }
+  vasteDatums.push(datum);
+  vasteDatums.sort();
+  input.value = '';
+  renderVasteDatums();
+}
+
+function verwijderVasteDatum(datum) {
+  vasteDatums = vasteDatums.filter(d => d !== datum);
+  renderVasteDatums();
+}
+
 // ── FREQUENTIE FORMULIER ──────────────────────────────────────────
 function toggleFreqType() {
   const t = document.getElementById('f-freq-type').value;
   document.getElementById('freq-vaste-dagen').style.display = t === 'vaste-dagen' ? 'block' : 'none';
   document.getElementById('freq-interval-dag').style.display = t === 'interval-dag' ? 'block' : 'none';
   document.getElementById('freq-interval-week').style.display = t === 'interval-week' ? 'block' : 'none';
+  document.getElementById('freq-dag-van-maand').style.display = t === 'dag-van-maand' ? 'block' : 'none';
+  document.getElementById('freq-vaste-datums').style.display = t === 'vaste-datums' ? 'block' : 'none';
   document.getElementById('freq-alternerend').style.display = t === 'alternerend' ? 'block' : 'none';
 }
 
@@ -1984,6 +2071,11 @@ function leesFrequentie() {
     freq.start = document.getElementById('f-interval-week-start').value;
     const actDag = document.querySelector('#freq-week-dagknoppen .dag-knop.actief');
     freq.dag = actDag ? actDag.dataset.dag : null;
+  } else if (t === 'dag-van-maand') {
+    freq.maandWeek = document.getElementById('f-maand-week').value;
+    freq.maandDag = parseInt(document.getElementById('f-maand-dag').value);
+  } else if (t === 'vaste-datums') {
+    freq.datums = [...vasteDatums];
   } else if (t === 'alternerend') {
     freq.interval = parseInt(document.getElementById('f-alt-interval').value) || 2;
     freq.start = document.getElementById('f-alt-start').value;
@@ -1993,6 +2085,7 @@ function leesFrequentie() {
 }
 
 function laadFrequentie(freq) {
+  vasteDatums = [];
   if (!freq) {
     document.getElementById('f-freq-type').value = 'dagelijks';
     toggleFreqType();
@@ -2013,6 +2106,12 @@ function laadFrequentie(freq) {
     document.querySelectorAll('#freq-week-dagknoppen .dag-knop').forEach(b => {
       b.classList.toggle('actief', b.dataset.dag === freq.dag);
     });
+  } else if (freq.type === 'dag-van-maand') {
+    document.getElementById('f-maand-week').value = freq.maandWeek || '1';
+    document.getElementById('f-maand-dag').value = freq.maandDag !== undefined ? freq.maandDag : '1';
+  } else if (freq.type === 'vaste-datums') {
+    vasteDatums = freq.datums ? [...freq.datums] : [];
+    renderVasteDatums();
   } else if (freq.type === 'alternerend') {
     document.getElementById('f-alt-interval').value = freq.interval || 2;
     document.getElementById('f-alt-start').value = freq.start || '';
@@ -2042,6 +2141,26 @@ function isAanDeBeurt(p, datum) {
     return diffDagen % interval === 0;
   }
 
+  if (freq.type === 'dag-van-maand') {
+    // Bv. eerste maandag (maandWeek=1, maandDag=1)
+    const dagVanWeek = datum.getDay(); // 0=zo, 1=ma...
+    if (dagVanWeek !== freq.maandDag) return false;
+    if (freq.maandWeek === 'last') {
+      // Laatste voorkomen: volgende week is al andere maand
+      const volgende = new Date(datum);
+      volgende.setDate(datum.getDate() + 7);
+      return volgende.getMonth() !== datum.getMonth();
+    }
+    const weekNr = Math.ceil(datum.getDate() / 7);
+    return weekNr === parseInt(freq.maandWeek);
+  }
+
+  if (freq.type === 'vaste-datums') {
+    if (!freq.datums || !freq.datums.length) return false;
+    const datumStr = datum.toISOString().slice(0, 10);
+    return freq.datums.includes(datumStr);
+  }
+
   if (freq.type === 'alternerend') {
     return alternerendActiefOp(p, datum).length > 0;
   }
@@ -2054,6 +2173,12 @@ function freqOmschrijving(freq) {
   if (freq.type === 'vaste-dagen') return freq.dagen && freq.dagen.length ? freq.dagen.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(' \xb7 ') : '\u2014';
   if (freq.type === 'interval-dag') return 'Om de ' + freq.interval + ' dagen';
   if (freq.type === 'interval-week') return 'Om de ' + freq.interval + ' weken' + (freq.dag ? ' op ' + freq.dag : '');
+  if (freq.type === 'dag-van-maand') {
+    const weekLabels = { '1': 'eerste', '2': 'tweede', '3': 'derde', '4': 'vierde', 'last': 'laatste' };
+    const dagLabels = { 0: 'zondag', 1: 'maandag', 2: 'dinsdag', 3: 'woensdag', 4: 'donderdag', 5: 'vrijdag', 6: 'zaterdag' };
+    return (weekLabels[freq.maandWeek] || '') + ' ' + (dagLabels[freq.maandDag] || '') + ' v/d maand';
+  }
+  if (freq.type === 'vaste-datums') return freq.datums && freq.datums.length ? freq.datums.length + ' vaste datum' + (freq.datums.length > 1 ? 's' : '') : 'Geen datums';
   if (freq.type === 'alternerend') return 'Alternerende zorg (' + (freq.interval || 2) + '-daags)';
   return '\u2014';
 }
