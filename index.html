@@ -437,7 +437,7 @@ textarea { resize: vertical; min-height: 70px; }
     <div>
       <div class="header-logo">VP <span>planning</span></div>
       <div class="header-date" id="header-date"></div>
-      <div style="font-size:10px;opacity:0.4;margin-top:1px">v1.24</div>
+      <div style="font-size:10px;opacity:0.4;margin-top:1px">v1.28</div>
     </div>
   </div>
 </div>
@@ -564,7 +564,7 @@ textarea { resize: vertical; min-height: 70px; }
     </div>
     <div class="field" style="margin-top:10px">
       <label>Adres (straat, gemeente)</label>
-      <input type="text" id="f-adres" placeholder="Kerkstraat 12, Ichtegem">
+      <input type="text" id="f-adres" placeholder="Kerkstraat 12, Ichtegem" onblur="autoZoekCoordinaten()">
     </div>
     <div class="form-grid" style="margin-top:10px">
       <div class="field"><label>Geboortedatum</label><input type="date" id="f-geb"></div>
@@ -1280,6 +1280,30 @@ function leesDagSchema() {
 }
 
 // ── GEOCODING ─────────────────────────────────────────────────────
+async function autoZoekCoordinaten() {
+  const adres = document.getElementById('f-adres').value.trim();
+  const latEl = document.getElementById('f-lat');
+  const lonEl = document.getElementById('f-lon');
+  // Alleen ophalen als er nog geen coördinaten zijn
+  if (!adres || (latEl.value && lonEl.value)) return;
+  try {
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=be&q=' + encodeURIComponent(adres);
+    const res = await fetch(url, { headers: { 'Accept-Language': 'nl', 'User-Agent': 'VP-Planning-App' } });
+    const data = await res.json();
+    if (data && data.length) {
+      latEl.value = parseFloat(parseFloat(data[0].lat).toFixed(5));
+      lonEl.value = parseFloat(parseFloat(data[0].lon).toFixed(5));
+      const status = document.getElementById('geo-status');
+      if (status) {
+        status.style.display = 'block';
+        status.style.color = 'var(--green)';
+        status.textContent = '✓ Coördinaten automatisch ingevuld';
+        setTimeout(() => status.style.display = 'none', 3000);
+      }
+    }
+  } catch(e) { /* stille fout — gebruiker kan altijd manueel ophalen */ }
+}
+
 async function zoekCoordinaten() {
   const adres = document.getElementById('f-adres').value.trim();
   const status = document.getElementById('geo-status');
